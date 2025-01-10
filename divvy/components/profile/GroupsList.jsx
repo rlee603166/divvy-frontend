@@ -1,37 +1,68 @@
 // components/profile/GroupsList.js
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { Users, Plus } from "lucide-react-native";
 import { profileTheme } from "../../theme";
+import { useGroups } from "../../context/GroupsContext";
+import { useNavigation } from "@react-navigation/native";
 
-const GroupsList = ({ groups }) => {
+const GroupsList = () => {
+  const navigation = useNavigation();
+  const { groups } = useGroups();
+
+  const handleGroupPress = (group) => {
+    navigation.navigate('GroupDetails', { group });
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My Groups</Text>
-        <TouchableOpacity style={styles.createButton}>
+        <TouchableOpacity 
+          style={styles.createButton}
+          onPress={() => navigation.navigate('CreateGroup')}
+        >
           <Plus width={16} height={16} color={profileTheme.colors.primary} />
           <Text style={styles.createButtonText}>Create Group</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.groupsList}>
-        {groups.map((group) => (
-          <TouchableOpacity key={group.id} style={styles.groupItem}>
-            <View style={styles.groupAvatar}>
-              <Users width={24} height={24} color="white" />
-            </View>
-            <View style={styles.groupInfo}>
-              <View style={styles.groupHeader}>
-                <Text style={styles.groupName}>{group.name}</Text>
-                <Text style={styles.membersCount}>{group.members} members</Text>
+      
+      {groups.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Users width={40} height={40} color={profileTheme.colors.gray300} />
+          <Text style={styles.emptyText}>No groups yet</Text>
+          <Text style={styles.emptySubtext}>Create a group to start splitting bills with friends</Text>
+        </View>
+      ) : (
+        <View style={styles.groupsList}>
+          {groups.map((group) => (
+            <TouchableOpacity 
+              key={group.id} 
+              style={styles.groupItem}
+              onPress={() => handleGroupPress(group)}
+            >
+              {group.groupImage ? (
+                <Image 
+                  source={{ uri: group.groupImage }} 
+                  style={styles.groupAvatar} 
+                />
+              ) : (
+                <View style={styles.groupAvatar}>
+                  <Users width={24} height={24} color="white" />
+                </View>
+              )}
+              <View style={styles.groupInfo}>
+                <View style={styles.groupHeader}>
+                  <Text style={styles.groupName}>{group.name}</Text>
+                  <Text style={styles.membersCount}>
+                    {group.members} members
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.lastActive}>
-                Last active {new Date(group.lastActive).toLocaleDateString()}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </View>
   );
 };
@@ -58,6 +89,26 @@ const styles = StyleSheet.create({
   createButtonText: {
     fontSize: 14,
     color: profileTheme.colors.primary,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: profileTheme.spacing.xl,
+    backgroundColor: profileTheme.colors.gray[50],
+    borderRadius: 16,
+    marginTop: profileTheme.spacing.md,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: profileTheme.colors.gray[500],
+    marginTop: profileTheme.spacing.md,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: profileTheme.colors.gray[400],
+    textAlign: 'center',
+    marginTop: profileTheme.spacing.sm,
   },
   groupsList: {
     gap: profileTheme.spacing.sm,
@@ -90,7 +141,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
   },
   groupName: {
     fontSize: 16,
@@ -98,10 +148,6 @@ const styles = StyleSheet.create({
     color: profileTheme.colors.text,
   },
   membersCount: {
-    fontSize: 14,
-    color: profileTheme.colors.secondary,
-  },
-  lastActive: {
     fontSize: 14,
     color: profileTheme.colors.secondary,
   },

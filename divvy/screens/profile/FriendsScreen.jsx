@@ -1,4 +1,4 @@
-// src/screens/Friends/FriendsScreen.js
+// src/screens/profile/FriendsScreen.js
 import React, { useState } from "react";
 import {
     View,
@@ -8,112 +8,82 @@ import {
     StyleSheet,
     SafeAreaView,
     StatusBar,
-    TouchableWithoutFeedback,
 } from "react-native";
 import { X, UserPlus } from "lucide-react-native";
 import { friendTheme } from "../../theme";
 import SearchBar from "../../components/friends/SearchBar";
-import { AddFriendModal } from "../../components/friends/AddFriendModal";
 import { FriendListItem } from "../../components/friends/FriendListItem";
 import { useFriends } from "../../hooks/useFriends";
 
-const initialFriends = [
-    { id: 1, name: "Sarah Miller", username: "@sarahm", status: "active" },
-    { id: 2, name: "Mike Chen", username: "@mikechen", status: "active" },
-    { id: 3, name: "Jordan Lee", username: "@jlee", status: "active" },
-    { id: 4, name: "Emma Wilson", username: "@emmaw", status: "active" },
-    { id: 5, name: "Alex Zhang", username: "@azhang", status: "active" },
-    { id: 6, name: "Alex Chi", username: "@achi", status: "active" },
-];
 
 export default function FriendsScreen({ navigation }) {
     const [searchQuery, setSearchQuery] = useState("");
-    const [isModalVisible, setIsModalVisible] = useState(false);
-    const [newFriendName, setNewFriendName] = useState("");
-    const [newFriendUsername, setNewFriendUsername] = useState("");
+    const { friends, deleteFriend } = useFriends(); // Remove initialFriends parameter
 
-    const { friends, addFriend, deleteFriend } = useFriends(initialFriends);
-
-    const filteredFriends = friends.filter(
-        friend =>
-            friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            friend.username.toLowerCase().includes(searchQuery.toLowerCase())
+    // Filter existing friends based on search query
+    const filteredFriends = friends.filter(friend =>
+        friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        friend.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
-
-    const handleAddFriend = () => {
-        if (addFriend(newFriendName, newFriendUsername)) {
-            setNewFriendName("");
-            setNewFriendUsername("");
-            setIsModalVisible(false);
-        }
-    };
-
-    const handleCloseModal = () => {
-        setIsModalVisible(false);
-        setNewFriendName("");
-        setNewFriendUsername("");
-    };
 
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="dark-content" />
             <View style={styles.container}>
-                {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Friends</Text>
                     <TouchableOpacity
                         style={styles.closeButton}
                         onPress={() => navigation.goBack()}
-                        activeOpacity={0.7}
                     >
                         <X width={24} height={24} color={friendTheme.colors.gray600} />
                     </TouchableOpacity>
                 </View>
 
-                {/* Content */}
-                <ScrollView
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
+                <View style={styles.content}>
                     <SearchBar
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         placeholder="Search friends..."
                     />
 
-                    <TouchableOpacity
-                        style={styles.addFriendButton}
-                        activeOpacity={0.7}
-                        onPress={() => setIsModalVisible(true)}
-                    >
-                        <UserPlus width={20} height={20} color={friendTheme.colors.primary} />
-                        <Text style={styles.addFriendText}>Add New Friend</Text>
-                    </TouchableOpacity>
-
-                    <Text style={styles.listHeader}>All Friends • {friends.length}</Text>
-
-                    <View style={styles.friendsList}>
-                        {filteredFriends.map(friend => (
-                            <FriendListItem
-                                key={friend.id}
-                                friend={friend}
-                                onPress={friend => console.log("Friend pressed:", friend)}
-                                onDelete={deleteFriend}
-                            />
-                        ))}
+                    <View style={styles.buttonContainer}>
+                        <TouchableOpacity
+                            style={styles.addButton}
+                            onPress={() => navigation.navigate('SearchUsers')}
+                        >
+                            <UserPlus width={20} height={20} color={friendTheme.colors.primary} />
+                            <Text style={styles.addButtonText}>Add New Friend</Text>
+                        </TouchableOpacity>
                     </View>
-                </ScrollView>
 
-                <AddFriendModal
-                    visible={isModalVisible}
-                    onClose={handleCloseModal}
-                    onAdd={handleAddFriend}
-                    newFriendName={newFriendName}
-                    setNewFriendName={setNewFriendName}
-                    newFriendUsername={newFriendUsername}
-                    setNewFriendUsername={setNewFriendUsername}
-                />
+                    <Text style={styles.listHeader}>
+                        All Friends • {filteredFriends.length}
+                    </Text>
+
+                    <ScrollView 
+                        style={styles.friendsList}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {filteredFriends.map(friend => {
+                            console.log('Rendering friend:', friend); // Add this line
+                            return (
+                                <FriendListItem
+                                    key={friend.id}
+                                    friend={friend}
+                                    onPress={() => console.log("Friend pressed:", friend)}
+                                    onDelete={() => deleteFriend(friend.id)}
+                                />
+                            );
+                        })}
+
+                        {filteredFriends.length === 0 && searchQuery && (
+                            <View style={styles.noResultsContainer}>
+                                <Text style={styles.noResultsText}>No friends found</Text>
+                            </View>
+                        )}
+                    </ScrollView>
+                </View>
             </View>
         </SafeAreaView>
     );
@@ -127,6 +97,10 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
+    content: {
+        flex: 1,
+        padding: friendTheme.spacing[4],
+    },
     header: {
         flexDirection: "row",
         justifyContent: "space-between",
@@ -135,7 +109,6 @@ const styles = StyleSheet.create({
         paddingVertical: friendTheme.spacing[3],
         borderBottomWidth: 1,
         borderBottomColor: friendTheme.colors.gray50,
-        backgroundColor: friendTheme.colors.white,
     },
     headerTitle: {
         fontSize: 24,
@@ -144,24 +117,19 @@ const styles = StyleSheet.create({
     },
     closeButton: {
         padding: friendTheme.spacing[2],
-        borderRadius: 9999,
     },
-    scrollView: {
-        flex: 1,
+    buttonContainer: {
+        marginVertical: friendTheme.spacing[4],
     },
-    scrollContent: {
-        padding: friendTheme.spacing[4],
-    },
-    addFriendButton: {
+    addButton: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: friendTheme.colors.indigo50,
         padding: friendTheme.spacing[4],
         borderRadius: 16,
-        marginBottom: friendTheme.spacing[4],
     },
-    addFriendText: {
+    addButtonText: {
         marginLeft: friendTheme.spacing[2],
         fontSize: 16,
         fontWeight: "500",
@@ -174,6 +142,16 @@ const styles = StyleSheet.create({
         marginBottom: friendTheme.spacing[4],
     },
     friendsList: {
-        gap: friendTheme.spacing[2],
+        flex: 1,
+    },
+    noResultsContainer: {
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        paddingTop: friendTheme.spacing[8],
+    },
+    noResultsText: {
+        fontSize: 16,
+        color: friendTheme.colors.gray500,
     },
 });

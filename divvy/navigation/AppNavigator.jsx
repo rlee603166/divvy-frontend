@@ -20,7 +20,7 @@ export default function AppNavigation() {
                 {isAuthenticated ? (
                     <App.Screen name="Main" component={AuthNavigator} />
                 ) : (
-                    <App.Screen name="Auth" component={UploadScreen} />
+                    <App.Screen name="Auth" component={TabNavigator} />
                 )}
             </App.Navigator>
         </NavigationContainer>

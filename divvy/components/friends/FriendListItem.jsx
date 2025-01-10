@@ -1,29 +1,17 @@
 // components/friends/FriendListItem.js
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import SwipeableRow from './SwipeableRow';
 import { friendTheme } from '../../theme';
 
 export function FriendListItem({ friend, onPress, onDelete }) {
-  // Get initials from friend's name
+
   const getInitials = (name) => {
     return name
       .split(' ')
       .map(word => word[0])
       .join('')
       .toUpperCase();
-  };
-
-  // Determine status color
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'active':
-        return friendTheme.colors.green500;
-      case 'inactive':
-        return friendTheme.colors.gray300;
-      default:
-        return friendTheme.colors.gray300;
-    }
   };
 
   return (
@@ -33,14 +21,23 @@ export function FriendListItem({ friend, onPress, onDelete }) {
         activeOpacity={0.7}
         style={styles.friendItem}
       >
-        {/* Avatar */}
         <View style={styles.avatarContainer}>
-          <Text style={styles.avatarText}>
-            {getInitials(friend.name)}
-          </Text>
+          {friend?.avatar ? (
+            <Image 
+              source={{ uri: friend.avatar }} 
+              style={styles.avatarImage}
+              onError={(e) => {
+                console.error('Image loading error:', e.nativeEvent.error);
+              }}
+              onLoad={() => console.log('Image loaded successfully')}
+            />
+          ) : (
+            <Text style={styles.avatarText}>
+              {getInitials(friend.name)}
+            </Text>
+          )}
         </View>
 
-        {/* Info */}
         <View style={styles.infoContainer}>
           <Text style={styles.name} numberOfLines={1}>
             {friend.name}
@@ -50,16 +47,18 @@ export function FriendListItem({ friend, onPress, onDelete }) {
           </Text>
         </View>
 
-        {/* Status */}
         <View style={styles.statusContainer}>
           <View 
             style={[
               styles.statusDot,
-              { backgroundColor: getStatusColor(friend.status) }
+              { backgroundColor: friend.status === 'active' ? 
+                friendTheme.colors.green500 : 
+                friendTheme.colors.gray300 
+              }
             ]} 
           />
           <Text style={styles.statusText}>
-            {friend.status.charAt(0).toUpperCase() + friend.status.slice(1)}
+            {friend.status}
           </Text>
         </View>
       </TouchableOpacity>
@@ -82,8 +81,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: friendTheme.spacing[3],
-    // borderWidth: 1,                              // Add border width
-    // borderColor: friendTheme.colors.gray300,     // Add border color
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontSize: 18,
@@ -123,4 +125,3 @@ const styles = StyleSheet.create({
 });
 
 export default FriendListItem;
-
