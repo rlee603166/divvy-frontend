@@ -1,4 +1,4 @@
-// src/screens/profile/FriendsScreen.js
+// FriendsScreen.jsx
 import React, { useState } from "react";
 import {
     View,
@@ -9,18 +9,16 @@ import {
     SafeAreaView,
     StatusBar,
 } from "react-native";
-import { X, UserPlus } from "lucide-react-native";
+import { X, UserPlus, Users } from "lucide-react-native";
 import { friendTheme } from "../../theme";
 import SearchBar from "../../components/friends/SearchBar";
 import { FriendListItem } from "../../components/friends/FriendListItem";
 import { useFriends } from "../../hooks/useFriends";
 
-
 export default function FriendsScreen({ navigation }) {
     const [searchQuery, setSearchQuery] = useState("");
-    const { friends, deleteFriend } = useFriends(); // Remove initialFriends parameter
+    const { friends, deleteFriend } = useFriends();
 
-    // Filter existing friends based on search query
     const filteredFriends = friends.filter(friend =>
         friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         friend.username.toLowerCase().includes(searchQuery.toLowerCase())
@@ -57,37 +55,47 @@ export default function FriendsScreen({ navigation }) {
                         </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.listHeader}>
-                        All Friends • {filteredFriends.length}
-                    </Text>
+                    {friends.length > 0 ? (
+                        <>
+                            <Text style={styles.listHeader}>
+                                All Friends • {filteredFriends.length}
+                            </Text>
 
-                    <ScrollView 
-                        style={styles.friendsList}
-                        showsVerticalScrollIndicator={false}
-                    >
-                        {filteredFriends.map(friend => {
-                            console.log('Rendering friend:', friend); // Add this line
-                            return (
-                                <FriendListItem
-                                    key={friend.id}
-                                    friend={friend}
-                                    onPress={() => console.log("Friend pressed:", friend)}
-                                    onDelete={() => deleteFriend(friend.id)}
-                                />
-                            );
-                        })}
+                            <ScrollView 
+                                style={styles.friendsList}
+                                showsVerticalScrollIndicator={false}
+                            >
+                                {filteredFriends.map(friend => (
+                                    <FriendListItem
+                                        key={friend.id}
+                                        friend={friend}
+                                        onPress={() => console.log("Friend pressed:", friend)}
+                                        onDelete={() => deleteFriend(friend.id)}
+                                    />
+                                ))}
 
-                        {filteredFriends.length === 0 && searchQuery && (
-                            <View style={styles.noResultsContainer}>
-                                <Text style={styles.noResultsText}>No friends found</Text>
-                            </View>
-                        )}
-                    </ScrollView>
+                                {filteredFriends.length === 0 && searchQuery && (
+                                    <View style={styles.noResultsContainer}>
+                                        <Text style={styles.noResultsText}>No friends found</Text>
+                                    </View>
+                                )}
+                            </ScrollView>
+                        </>
+                    ) : (
+                        <View style={styles.emptyContainer}>
+                            <Users width={40} height={40} color={friendTheme.colors.gray300} />
+                            <Text style={styles.emptyText}>No friends yet</Text>
+                            <Text style={styles.emptySubtext}>
+                                Add friends to start splitting bills and sharing expenses
+                            </Text>
+                        </View>
+                    )}
                 </View>
             </View>
         </SafeAreaView>
     );
 }
+
 
 const styles = StyleSheet.create({
     safeArea: {
@@ -154,4 +162,27 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: friendTheme.colors.gray500,
     },
+    emptyContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: friendTheme.spacing[4],
+        backgroundColor: friendTheme.colors.white,
+        borderRadius: 16,
+        marginTop: friendTheme.spacing[4],
+    },
+    emptyText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: friendTheme.colors.gray900,
+        marginTop: friendTheme.spacing[4],
+    },
+    emptySubtext: {
+        fontSize: 14,
+        color: friendTheme.colors.gray600,
+        textAlign: 'center',
+        marginTop: friendTheme.spacing[2],
+    },
+
+
 });

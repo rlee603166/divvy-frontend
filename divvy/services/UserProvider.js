@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { createContext, useContext, useEffect, useState } from "react";
+import { Alert } from "react-native";
 
 const UserContext = createContext(null);
 
@@ -9,22 +10,63 @@ export const UserProvider = ({ children }) => {
 
     const [state, setState] = useState({
         accessToken: null,
-        user_id: 1,
-        name: "Ryan Lee",
-        username: "sush",
-        phone: null,
+        username: "@johndoe",
+        phone: '123-455-6789',
         isAuthenticated: false,
         isLoading: true,
         error: null,
+        name: "Alex Johnson",
+        profileImage: null,
     });
+
+    // Debug useEffect to track state changes
+    useEffect(() => {
+        console.log('Auth State Changed:', {
+            username: state.username,
+            isAuthenticated: state.isAuthenticated,
+            isLoading: state.isLoading
+        });
+    }, [state.username, state.isAuthenticated, state.isLoading]);
 
     useEffect(() => {
         checkAuthState();
     }, []);
 
+    const updateProfileImage = (imageUri) => {
+        setState(prev => ({
+            ...prev,
+            profileImage: imageUri
+        }));
+    };
+
+    const removeProfileImage = () => {
+        Alert.alert(
+            'Remove Profile Picture',
+            'Are you sure you want to remove your profile picture?',
+            [
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: () => {
+                        setState(prev => ({
+                            ...prev,
+                            profileImage: null
+                        }));
+                    },
+                },
+            ]
+        );
+    };
+
     const loadStoredUsername = async () => {
         try {
-            return await SecureStore.getItemAsync("username");
+            const username = await SecureStore.getItemAsync("username");
+            console.log('Loaded stored username:', username);
+            return username;
         } catch (error) {
             console.error("Failed to load stored username:", error);
             return null;
@@ -34,27 +76,37 @@ export const UserProvider = ({ children }) => {
     const saveUsername = async username => {
         try {
             await SecureStore.setItemAsync("username", username);
+            console.log('Saved username to storage:', username);
         } catch (error) {
             console.error("Failed to save username:", error);
         }
     };
 
     const checkAuthState = async () => {
+        console.log('Starting checkAuthState...');
         try {
             const accessToken = await SecureStore.getItemAsync("access_token");
             const refreshToken = await SecureStore.getItemAsync("refresh_token");
             const username = await loadStoredUsername();
+            
+            console.log('Stored credentials:', { 
+                hasAccessToken: !!accessToken, 
+                hasRefreshToken: !!refreshToken,
+                storedUsername: username 
+            });
 
             if (!accessToken || !refreshToken) {
+                console.log('No tokens found, setting initial state');
                 setState(prev => ({
                     ...prev,
-                    username,
+                    username: prev.username || username, // Keep existing username if available
                     isLoading: false,
                 }));
                 return;
             }
 
             const isValidAccessToken = await validateAccessToken(accessToken);
+            console.log('Access token validation:', isValidAccessToken);
 
             if (isValidAccessToken) {
                 await loadUserData(accessToken);
@@ -62,10 +114,12 @@ export const UserProvider = ({ children }) => {
             }
 
             const newTokens = await refreshAccessToken(refreshToken);
+            console.log('Token refresh result:', !!newTokens);
 
             if (newTokens) {
                 await loadUserData(newTokens.access_token);
             } else {
+                console.log('Token refresh failed, logging out');
                 await logout();
             }
         } catch (error) {
@@ -78,8 +132,9 @@ export const UserProvider = ({ children }) => {
         }
     };
 
-    const loadUserData = async ( token ) => {
+    const loadUserData = async (token) => {
         try {
+            console.log('Loading user data with token...');
             const response = await fetch(`${apiURL}/users/me`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -88,6 +143,7 @@ export const UserProvider = ({ children }) => {
 
             if (response.ok) {
                 const userData = await response.json();
+                console.log('User data loaded:', userData);
                 setState(prev => ({
                     ...prev,
                     username: userData.username,
@@ -103,7 +159,7 @@ export const UserProvider = ({ children }) => {
         }
     };
 
-    const validateAccessToken = async ( token ) => {
+    const validateAccessToken = async (token) => {
         try {
             const response = await fetch(`${apiURL}/auth/validate-access`, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -114,7 +170,7 @@ export const UserProvider = ({ children }) => {
         }
     };
 
-    const refreshAccessToken = async ( refreshToken ) => {
+    const refreshAccessToken = async (refreshToken) => {
         try {
             const response = await fetch(`${apiURL}/auth/refresh`, {
                 method: "POST",
@@ -142,6 +198,7 @@ export const UserProvider = ({ children }) => {
 
     const login = async (username, phone, code) => {
         try {
+            console.log('Attempting login with username:', username);
             const response = await fetch(`${apiURL}/auth/token`, {
                 method: "POST",
                 headers: {
@@ -157,7 +214,7 @@ export const UserProvider = ({ children }) => {
 
             if (!response.ok) {
                 throw new Error("Login failed");
-            }            
+            }
 
             const data = await response.json();
 
@@ -173,9 +230,11 @@ export const UserProvider = ({ children }) => {
                 isAuthenticated: true,
                 error: null,
             }));
+            console.log('Login successful for username:', username);
 
             return true;
         } catch (error) {
+            console.error('Login failed:', error);
             setState(prev => ({
                 ...prev,
                 error: "Login failed",
@@ -184,7 +243,7 @@ export const UserProvider = ({ children }) => {
         }
     };
 
-    const requestVerificationCode = async ( username ) => {
+    const requestVerificationCode = async (username) => {
         try {
             const response = await fetch(`${apiURL}/auth/request-code`, {
                 method: "POST",
@@ -201,7 +260,6 @@ export const UserProvider = ({ children }) => {
             }
 
             const data = response.json();
-
             return data;
         } catch (error) {
             setState(prev => ({
@@ -212,12 +270,9 @@ export const UserProvider = ({ children }) => {
         }
     };
 
-    const signup = async ( phone, username, photo, ) => {
-
-    }
-
     const logout = async () => {
         try {
+            console.log('Logging out...');
             await SecureStore.deleteItemAsync("access_token");
             await SecureStore.deleteItemAsync("refresh_token");
             await SecureStore.deleteItemAsync("username");
@@ -228,7 +283,10 @@ export const UserProvider = ({ children }) => {
                 isAuthenticated: false,
                 isLoading: false,
                 error: null,
+                name: "Alex Johnson",
+                profileImage: null,
             });
+            console.log('Logout complete');
         } catch (error) {
             console.error("Logout failed:", error);
         }
@@ -241,6 +299,8 @@ export const UserProvider = ({ children }) => {
         requestVerificationCode,
         refreshAccessToken,
         validateAccessToken,
+        updateProfileImage,
+        removeProfileImage,
     };
 
     return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: profileTheme.colors.gray[500],
     marginTop: profileTheme.spacing.md,
   },

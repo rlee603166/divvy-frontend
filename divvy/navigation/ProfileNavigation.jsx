@@ -10,29 +10,7 @@ import { GroupsProvider } from "../context/GroupsContext";  // Updated import
 
 const ProfileStack = createNativeStackNavigator();
 
-const initialFriends = [
-    { 
-        id: 1, 
-        name: "Sarah Miller", 
-        username: "@sarahm", 
-        status: "active",
-        avatar: "https://i.pravatar.cc/150?u=sarah"
-    },
-    { 
-        id: 2, 
-        name: "Mike Chen", 
-        username: "@mikechen", 
-        status: "active",
-        avatar: "https://i.pravatar.cc/150?u=mike"
-    },
-    { 
-        id: 3, 
-        name: "Jordan Lee", 
-        username: "@jlee", 
-        status: "active",
-        avatar: "https://i.pravatar.cc/150?u=jordan"
-    }
-];
+const initialFriends = [];
 
 const initialGroups = [];
 

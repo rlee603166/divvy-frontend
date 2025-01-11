@@ -1,10 +1,14 @@
-import React from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
-import { Users, ChevronRight } from "lucide-react-native";
-import { useNavigation } from "@react-navigation/native";
-import { profileTheme } from "../../theme";
 
-const FriendsSummary = ({ navigation, friends }) => {
+// FriendsSummary.jsx
+import React from "react";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from "react-native";
+import { Users, ChevronRight } from "lucide-react-native";
+import { profileTheme } from "../../theme";
+import { useFriends } from "../../hooks/useFriends";
+
+const FriendsSummary = ({ navigation }) => {
+    const { friends } = useFriends();
+    const displayFriends = friends.slice(0, 5);
 
     const getInitials = name => {
         return name
@@ -18,22 +22,48 @@ const FriendsSummary = ({ navigation, friends }) => {
         navigation.navigate("Friends");
     };
 
+    // Calculate container width based on number of friends
+    const getContainerWidth = () => {
+        const itemWidth = 56; // Width of each friend item
+        const gap = 12; // Gap between items
+        if (friends.length === 0) return '100%';
+        const totalWidth = (displayFriends.length * itemWidth) + ((displayFriends.length - 1) * gap);
+        return totalWidth;
+    };
+
     return (
         <View style={styles.container}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollView}>
-                <View style={styles.friendsList}>
-                    {friends.slice(0, 5).map(friend => (
-                        <View key={friend.id} style={styles.friendItem}>
-                            <View style={styles.avatar}>
-                                <Text style={styles.avatarText}>{getInitials(friend.name)}</Text>
+            {friends.length > 0 ? (
+                <View style={styles.contentContainer}>
+                    <View style={[styles.friendsList, { width: getContainerWidth() }]}>
+                        {displayFriends.map(friend => (
+                            <View key={friend.id} style={styles.friendItem}>
+                                {friend.avatar ? (
+                                    <Image 
+                                        source={{ uri: friend.avatar }}
+                                        style={styles.avatarImage}
+                                    />
+                                ) : (
+                                    <View style={styles.avatar}>
+                                        <Text style={styles.avatarText}>{getInitials(friend.name)}</Text>
+                                    </View>
+                                )}
+                                <Text style={styles.friendName} numberOfLines={1}>
+                                    {friend.name.split(" ")[0]}
+                                </Text>
                             </View>
-                            <Text style={styles.friendName} numberOfLines={1}>
-                                {friend.name.split(" ")[0]}
-                            </Text>
-                        </View>
-                    ))}
+                        ))}
+                    </View>
                 </View>
-            </ScrollView>
+            ) : (
+                <View style={styles.emptyStateContainer}>
+                    <Users width={32} height={32} color={profileTheme.colors.gray300} />
+                    <View style={styles.emptyTextContainer}>
+                        <Text style={styles.emptyTitle}>No friends yet</Text>
+                        <Text style={styles.emptySubtext}>Add friends to start sharing expenses</Text>
+                    </View>
+                </View>
+            )}
 
             <TouchableOpacity style={styles.footer} onPress={handlePress}>
                 <View style={styles.footerContent}>
@@ -45,6 +75,7 @@ const FriendsSummary = ({ navigation, friends }) => {
         </View>
     );
 };
+
 
 const styles = StyleSheet.create({
     container: {
@@ -87,7 +118,7 @@ const styles = StyleSheet.create({
     },
     friendName: {
         fontSize: 14,
-        color: profileTheme.colors.secondary,
+        color: profileTheme.colors.gray600,
         textAlign: "center",
     },
     footer: {
@@ -106,6 +137,49 @@ const styles = StyleSheet.create({
     footerText: {
         fontWeight: "500",
         color: profileTheme.colors.text,
+    },
+    emptyContainer: {
+        padding: profileTheme.spacing.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    emptyText: {
+        fontSize: 14,
+        color: profileTheme.colors.gray400,
+    },
+    contentContainer: {
+        alignItems: 'center',
+        padding: profileTheme.spacing.md,
+    },
+    friendsList: {
+        flexDirection: "row",
+        justifyContent: "center",
+        gap: profileTheme.spacing.md - 4,
+    },
+    avatarImage: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        marginBottom: profileTheme.spacing.sm,
+    },
+    emptyStateContainer: {
+        padding: profileTheme.spacing.xl,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: profileTheme.spacing.md,
+    },
+    emptyTextContainer: {
+        flex: 1,
+    },
+    emptyTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: profileTheme.colors.gray700,
+        marginBottom: 4,
+    },
+    emptySubtext: {
+        fontSize: 14,
+        color: profileTheme.colors.gray500,
     },
 });
 
