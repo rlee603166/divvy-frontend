@@ -11,114 +11,52 @@ import {
     StatusBar,
     Alert,
     ActivityIndicator,
-    Image,
     StyleSheet,
 } from "react-native";
+import { Image } from "expo-image";
 import * as Contacts from "expo-contacts";
+import UserService from "../../services/UserService";
+import { useUser } from "../../services/UserProvider";
 
-const mockFriends = [
-    {
-        id: "f1",
-        name: "James Wilson",
-        phone: "jamo",
-        imageUri: null,
-        selected: false,
-    },
-    {
-        id: "f2",
-        name: "Linda Chen",
-        phone: "linChinChin",
-        imageUri: null,
-        selected: false,
-    },
-    {
-        id: "f3",
-        name: "Robert Taylor",
-        phone: "robT",
-        imageUri: null,
-        selected: false,
-    },
-];
-
-const ContactList = ({ setStep, onSelectPeople, type, handleBack, ifModal, groupData }) => {
-    const [contacts, setContacts] = useState(ifModal && groupData ? groupData.contacts : []);
-    const [friends, setFriends] = useState(ifModal && groupData ? groupData.friends : mockFriends);
-    const [groups, setGroups] = useState(
-        ifModal && groupData
-            ? groupData.groups
-            : [
-                  {
-                      id: "1",
-                      name: "Family",
-                      members: [
-                          { id: "0", name: "James Lee", phone: "jamo", imageUri: null },
-                          { id: "2", name: "Kodi", phone: "jamo", imageUri: null },
-                      ],
-                      selected: false,
-                  },
-                  {
-                      id: "2",
-                      name: "Work",
-                      members: [
-                          { id: "3", name: "Dylan Pell", phone: "jamo", imageUri: null },
-                          { id: "4", name: "Andrew Yang", phone: "jamo", imageUri: null },
-                          { id: "5", name: "Justin Oliak", phone: "jamo", imageUri: null },
-                      ],
-                      selected: false,
-                  },
-                  {
-                      id: "3",
-                      name: "Friends",
-                      members: [
-                          {
-                              id: "6",
-                              name: "Christian Huang",
-                              phone: "jamo",
-                              imageUri: null,
-                          },
-                          { id: "7", name: "Kaleb Hsieh", phone: "jamo", imageUri: null },
-                          {
-                              id: "8",
-                              name: "Evan Lockwood",
-                              phone: "123123123",
-                              imageUri: null,
-                          },
-                      ],
-                      selected: false,
-                  },
-              ]
-    );
+const ContactList = ({
+    onSelectPeople,
+    type,
+    handleBack,
+    ifModal,
+    groupData,
+    fetchedFriends,
+    fetchedGroups,
+}) => {
+    const [contacts, setContacts] = useState([]);
+    const [friends, setFriends] = useState([]);
+    const [groups, setGroups] = useState([]);
 
     const [loading, setLoading] = useState(true);
     const [selectedTab, setSelectedTab] = useState("friends");
     const [searchQuery, setSearchQuery] = useState("");
     const [filteredData, setFilteredData] = useState([]);
 
-    const fetchFriends = async () => {
-        try {
-            return mockFriends;
-        } catch (error) {
-            Alert.alert("Error", "Failed to load friends");
-            return [];
-        }
-    };
+    const { user_id } = useUser();
 
     useEffect(() => {
         const initializeData = async () => {
             await loadContacts();
-            const friendsData = await fetchFriends();
-            setFriends(friendsData);
-            setLoading(false);
+            if (ifModal) {
+                setFriends(groupData.friends);
+                setGroups(groupData.groups);
+                setContacts(groupData.contacts);
+                return;
+            }
+            setFriends(fetchedFriends);
+            setGroups(fetchedGroups);
         };
 
-        if (!ifModal) {
+        try {
+            setLoading(true);
             initializeData();
-        } else {
-            // Use the provided groupData in modal mode
-            setContacts(groupData.contacts || []);
-            setFriends(groupData.friends || mockFriends);
-            setGroups(groupData.groups || []);
-            setFilteredData(groupData.contacts || []);
+        } catch (error) {
+            console.error(error);
+        } finally {
             setLoading(false);
         }
     }, []);
@@ -182,18 +120,63 @@ const ContactList = ({ setStep, onSelectPeople, type, handleBack, ifModal, group
     };
 
     const getAllSelectedItems = () => {
-        const selectedContacts = contacts.filter(item => item.selected);
-        const selectedFriends = friends.filter(item => item.selected);
-        const selectedGroups = groups.filter(item => item.selected);
+        const selectedContacts = contacts?.filter(item => item.selected) || [];
+        const selectedFriends = friends?.filter(item => item.selected) || [];
+        const selectedGroups = groups?.filter(item => item.selected) || [];
+
         return [...selectedContacts, ...selectedFriends, ...selectedGroups];
     };
 
     const hasSelectedItems = () => {
         return getAllSelectedItems().length > 0;
     };
-
     const toggleSelection = id => {
+        const isUserAlreadySelected = userId => {
+            const selectedFriendIds = new Set(friends.filter(f => f.selected).map(f => f.id));
+            const selectedContactIds = new Set(contacts.filter(c => c.selected).map(c => c.id));
+            const selectedGroupMemberIds = new Set(
+                groups
+                    .filter(g => g.selected)
+                    .flatMap(g => g.members)
+                    .map(m => m.id)
+            );
+
+            if (selectedTab === "friends") selectedFriendIds.delete(userId);
+            if (selectedTab === "contacts") selectedContactIds.delete(userId);
+
+            return (
+                selectedFriendIds.has(userId) ||
+                selectedContactIds.has(userId) ||
+                selectedGroupMemberIds.has(userId)
+            );
+        };
+
+        const isUserInSelectedGroups = userId => {
+            return groups.filter(g => g.selected).some(g => g.members.some(m => m.id === userId));
+        };
+
         const updateList = (list, setList) => {
+            const itemToUpdate = list.find(item => item.id === id);
+            if (!itemToUpdate) return list;
+
+            if (!itemToUpdate.selected && selectedTab !== "groups") {
+                if (isUserAlreadySelected(itemToUpdate.id)) {
+                    Alert.alert(
+                        "Duplicate Selection",
+                        "User already selected from another category."
+                    );
+                    return list;
+                }
+
+                if (isUserInSelectedGroups(itemToUpdate.id)) {
+                    Alert.alert(
+                        "Duplicate Selection",
+                        "User already included in a selected group."
+                    );
+                    return list;
+                }
+            }
+
             const updatedList = list.map(item =>
                 item.id === id ? { ...item, selected: !item.selected } : item
             );
@@ -214,24 +197,38 @@ const ContactList = ({ setStep, onSelectPeople, type, handleBack, ifModal, group
                 break;
         }
 
-        // Update filtered data to reflect selection changes
         if (searchQuery.trim() === "") {
             setFilteredData(updatedData);
         }
     };
 
     const onNext = () => {
+        const uniqueMembersMap = new Map();
+
+        groups
+            .filter(g => g.selected)
+            .flatMap(g => g.members)
+            .filter(member => member.id !== user_id && member.user_id !== user_id) // Filter out both id and user_id
+            .forEach(member => uniqueMembersMap.set(member.id, member));
+
+        friends
+            .filter(f => f.selected)
+            .filter(friend => friend.id !== user_id && friend.user_id !== user_id)
+            .forEach(friend => uniqueMembersMap.set(friend.id, friend));
+
+        contacts
+            .filter(c => c.selected)
+            .filter(contact => contact.id !== user_id && contact.user_id !== user_id)
+            .forEach(contact => uniqueMembersMap.set(contact.id, contact));
+
         const selectedData = {
-            contacts,
-            friends,
-            groups,
+            contacts: contacts,
+            friends: friends,
+            groups: groups,
+            uniqueMemberIds: Array.from(uniqueMembersMap.values()),
         };
 
         onSelectPeople(selectedData);
-
-        if (!ifModal) {
-            setStep(3);
-        }
     };
 
     const CheckIcon = () => <Text style={styles.checkmark}>✓</Text>;
@@ -240,9 +237,10 @@ const ContactList = ({ setStep, onSelectPeople, type, handleBack, ifModal, group
         <View style={styles.avatarContainer}>
             {imageUri ? (
                 <Image
+                    style={styles.avatar} // Use the same style you already have
                     source={{ uri: imageUri }}
-                    style={styles.avatarImage}
-                    onError={error => console.log("Image error:", error, "URI:", imageUri)}
+                    resizeMode="cover"
+                    cachePolicy="memory"
                 />
             ) : (
                 <View style={styles.avatarFallback}>
@@ -291,9 +289,10 @@ const ContactList = ({ setStep, onSelectPeople, type, handleBack, ifModal, group
         <TouchableOpacity style={styles.contactItem} onPress={() => toggleSelection(item.id)}>
             {item.imageUri ? (
                 <Image
-                    source={{ uri: item.imageUri }}
                     style={styles.avatar}
-                    onError={error => console.log("Contact image error:", error)}
+                    source={{ uri: item.imageUri }}
+                    resizeMode="cover"
+                    cachePolicy="memory"
                 />
             ) : (
                 <View style={[styles.avatar, styles.avatarFallback]}>
@@ -408,10 +407,26 @@ const ContactList = ({ setStep, onSelectPeople, type, handleBack, ifModal, group
 
             <FlatList
                 data={filteredData}
-                renderItem={({ item }) => <ContactItem item={item} />}
-                keyExtractor={item => item.id}
+                renderItem={({ item }) => (
+                    <ContactItem item={item} onToggle={toggleSelection} selectedTab={selectedTab} />
+                )}
+                keyExtractor={item => String(item.id)}
                 style={styles.list}
                 contentContainerStyle={styles.listContent}
+                removeClippedSubviews={true}
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                getItemLayout={(data, index) => ({
+                    length: 56,
+                    offset: 56 * index,
+                    index,
+                })}
+                ListEmptyComponent={() => (
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>No items found</Text>
+                    </View>
+                )}
             />
 
             <View style={styles.floatingButtonContainer}>
@@ -646,6 +661,20 @@ const styles = StyleSheet.create({
     },
     floatingButtonDisabled: {
         backgroundColor: "#A5A6F6",
+    },
+    image: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+    },
+    emptyContainer: {
+        flex: 1,
+        alignItems: "center",
+        paddingTop: 40,
+    },
+    emptyText: {
+        fontSize: 16,
+        color: "#666",
     },
 });
 

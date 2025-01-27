@@ -7,8 +7,11 @@ const UserContext = createContext(null);
 
 export const UserProvider = ({ children }) => {
     const apiURL = "http://localhost:8000/api/v1";
+    // const apiURL = "http://47.144.148.193:8000/api/v1";
 
     const [state, setState] = useState({
+        user_id:1,
+        id: 1,
         accessToken: null,
         username: "@johndoe",
         phone: '123-455-6789',

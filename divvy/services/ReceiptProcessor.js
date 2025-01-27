@@ -1,6 +1,8 @@
 export class Person {
-    constructor(name) {
+    constructor(name, id, phone = null) {
         this.name = name;
+        this.id = id || null;
+        this.phone = phone;
         this.items = [];
         this.subtotal = 0;
     }
@@ -9,7 +11,7 @@ export class Person {
         this.items = [...this.items, item];
         this.subtotal = this.items.reduce((total, item) => total + item.getPricePer(), 0);
     }
-    
+
     setItems(items) {
         this.items = items;
         this.subtotal = this.items.reduce((total, item) => total + item.getPricePer(), 0);
@@ -24,7 +26,7 @@ export class Person {
     }
 
     toString() {
-        return `<Person ${this.name}>`
+        return `<Person ${this.name}>`;
     }
 }
 
@@ -32,7 +34,7 @@ export class Item {
     constructor(name, price, users) {
         this.name = name;
         this.price = price;
-        this.users = users; 
+        this.users = users;
     }
 
     getName() {
@@ -45,82 +47,127 @@ export class Item {
 }
 
 export default class ReceiptProcessor {
-    constructor() {}
+    constructor() {
+        self.people = {};
+    }
+
+    getPeopleHashMap() {
+        const inverted = Object.entries(self.people).reduce((acc, [name, id]) => {
+            acc[id] = name;
+            return acc;
+        }, {});
+
+        return inverted;
+    }
 
     processTransaction(receipt, group) {
         const personTotals = {};
-        
-        group.members.forEach((person) => {
-            personTotals[person.name] = new Person(person.name);
+        group.members.forEach(person => {
+            personTotals[person.id] = new Person(person.name, person.id);
+            self.people[person.phone] = person;
         });
 
-        receipt.items.forEach((item) => {
+        receipt.items.forEach(item => {
             const size = item.people.length;
-            item.people.forEach((person) => {
-                personTotals[person].addItem(new Item(item.name, item.price, size));  
+            item.people.forEach(person => {
+                personTotals[person].addItem(new Item(item.name, item.price, size));
             });
         });
 
         return personTotals;
     }
 
+    processAdditionalCharges(subtotal, group, processedReceipt, additionals) {
+        const { tip, tax, misc } = additionals;
+        const roundToTwo = num => Math.round(num * 100) / 100;
+        const charges = { tip, tax, misc };
+        let highestPayer = group.members[0];
+        let actualTotals = { tip: 0, tax: 0, misc: 0 };
+
+        group.members.forEach(person => {
+            const personID = self.people[person.phone].id;
+            const ratio = processedReceipt[personID].subtotal / subtotal;
+            processedReceipt[personID].tip = roundToTwo(tip * ratio);
+            processedReceipt[personID].tax = roundToTwo(tax * ratio);
+            processedReceipt[personID].misc = roundToTwo(misc * ratio);
+            actualTotals.tip += processedReceipt[personID].tip;
+            actualTotals.tax += processedReceipt[personID].tax;
+            actualTotals.misc += processedReceipt[personID].misc;
+
+            if (
+                processedReceipt[personID].subtotal >
+                processedReceipt[self.people[highestPayer.phone].id].subtotal
+            ) {
+                highestPayer = person;
+            }
+
+            processedReceipt[personID].finalTotal =
+                processedReceipt[personID].subtotal +
+                processedReceipt[personID].tip +
+                processedReceipt[personID].tax +
+                processedReceipt[personID].misc;
+        });
+
+        ["tip", "tax", "misc"].forEach(chargeType => {
+            const difference = roundToTwo(charges[chargeType] - actualTotals[chargeType]);
+            if (difference !== 0) {
+                processedReceipt[self.people[highestPayer.phone].id][chargeType] = roundToTwo(
+                    processedReceipt[self.people[highestPayer.phone].id][chargeType] + difference
+                );
+                processedReceipt[self.people[highestPayer.phone].id].finalTotal += difference;
+            }
+        });
+
+        Object.assign(processedReceipt, { tip, tax, misc });
+        return processedReceipt;
+    }
+
     processReceipt(receipt, group) {
         const result = this.processTransaction(receipt, group);
-        // more logic
-        return result;
+        const final = this.processAdditionalCharges(
+            receipt.subtotal,
+            group,
+            result,
+            receipt.additional
+        );
+
+        return final;
     }
 }
 
-const mockTransaction = {
-  id: "1",
-  subtotal: 82,
-  items: [
-    {
-      id: "1",
-      name: "Pasta Carbonara",
-      price: 22.5,
-      people: ["John", "Alice"]
-    },
-    {
-      id: "2",
-      name: "Caesar Salad",
-      price: 15.0,
-      people: ["John", "Alice"]
-    },
-    {
-      id: "3",
-      name: "Grilled Salmon",
-      price: 32.0,
-      people: ["Alice", "Bob", "John"]
-    },
-    {
-      id: "4",
-      name: "Glass of Wine",
-      price: 12.5,
-      people: ["Alice", "Bob", "John"]
-    },
-  ],
-};
-const mockReceipt = {
-    items: [
-        { name: "Pizza", price: 20, people: ["John", "Alice"] },
-        { name: "Salad", price: 15, people: ["Bob"] },
-        { name: "Wine", price: 30, people: ["Alice", "Bob", "John"] }
-    ]
-};
+export function formatForAPI(processedReceipt, receipt_id) {
+    const { tip = 0, tax = 0, misc = 0 } = processedReceipt;
 
-const mockGroup = {
-    id: "1",
-    name: "Dinner Group",
-    members: [
-      { id: "1", name: "John" },
-      { id: "2", name: "Alice" },
-      { id: "3", name: "Bob" },
-    ],
-};
+    const personEntries = Object.entries(processedReceipt).filter(
+        ([key, value]) => value instanceof Person
+    );
 
-// Test the implementation
-const receiptProcessor = new ReceiptProcessor();
-const result = receiptProcessor.processTransaction(mockTransaction, mockGroup);
-
-
+    return {
+        receipt_id,
+        summary: {
+            tip,
+            tax,
+            misc,
+            subtotal: personEntries.reduce((sum, [_, person]) => sum + person.subtotal, 0),
+            total: personEntries.reduce((sum, [_, person]) => sum + person.finalTotal, 0),
+        },
+        splits: personEntries.map(([_, person]) => ({
+            name: person.name,
+            id: person.id,
+            ...(person.phone &&
+            /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(person.id)
+                ? { phone: person.phone }
+                : {}),
+            subtotal: person.subtotal,
+            finalTotal: person.finalTotal,
+            tip: person.tip || 0,
+            tax: person.tax || 0,
+            misc: person.misc || 0,
+            items: person.items.map(item => ({
+                name: item.getName(),
+                price: item.getPricePer(),
+                totalPrice: item.price,
+            })),
+        })),
+    };
+}

@@ -17,11 +17,22 @@ import {
 import theme from "../../theme";
 
 const calculateTotals = data => {
-    const subtotal = Object.values(data).reduce((sum, person) => sum + person.subtotal, 0);
-    const tax = subtotal * 0.08;
-    const tip = subtotal * 0.18;
-    const total = subtotal + tax + tip;
-    return { subtotal, tax, tip, total };
+    if (!data || typeof data !== "object") {
+        return { subtotal: 0, tax: 0, tip: 0, misc: 0, total: 0 };
+    }
+
+    const subtotal = Object.entries(data)
+        .filter(([key]) => !["tax", "tip", "misc"].includes(key))
+        .reduce((sum, [_, person]) => {
+            const personSubtotal = person?.subtotal || 0;
+            return sum + personSubtotal;
+        }, 0);
+
+    const tax = data.tax || 0;
+    const tip = data.tip || 0;
+    const misc = data.misc || 0;
+    const total = subtotal + tax + tip + misc;
+    return { subtotal, tax, tip, misc, total };
 };
 
 const AnimatedSwipeText = ({ isDragging, style }) => {
@@ -42,7 +53,7 @@ const AnimatedSwipeText = ({ isDragging, style }) => {
     );
 };
 
-const ReviewScreen = ({ isDragging, processed, setStep }) => {
+const ReviewScreen = ({ isDragging, processed, setStep, peopleHashMap }) => {
     const [selectedPerson, setSelectedPerson] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -51,6 +62,7 @@ const ReviewScreen = ({ isDragging, processed, setStep }) => {
         subtotal: 0,
         tax: 0,
         tip: 0,
+        misc: 0,
         total: 0,
     });
 
@@ -127,6 +139,10 @@ const ReviewScreen = ({ isDragging, processed, setStep }) => {
         ]).start();
     };
 
+    const formatNumber = num => {
+        return (num || 0).toFixed(2);
+    };
+
     const handleCloseModal = () => {
         Animated.parallel([
             Animated.timing(slideAnim, {
@@ -149,7 +165,7 @@ const ReviewScreen = ({ isDragging, processed, setStep }) => {
         return (
             <View style={styles.loadingContainer}>
                 <Text>Loading...</Text>
-            </View> // Fixed closing tag
+            </View>
         );
     }
 
@@ -167,18 +183,22 @@ const ReviewScreen = ({ isDragging, processed, setStep }) => {
                     <Text style={styles.sectionTitleShares}>Individual Shares</Text>
                     <ScrollView style={styles.scrollView}>
                         <View style={styles.section}>
-                            {Object.keys(data).map(name => (
-                                <TouchableOpacity
-                                    key={name}
-                                    style={styles.shareCard}
-                                    onPress={() => handlePersonPress(name)}
-                                >
-                                    <Text style={styles.personName}>{name}</Text>
-                                    <Text style={styles.amount}>
-                                        ${data[name].subtotal.toFixed(2)}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
+                            {Object.keys(data)
+                                .filter(key => !["tax", "tip", "misc"].includes(key))
+                                .map(name => (
+                                    <TouchableOpacity
+                                        key={name}
+                                        style={styles.shareCard}
+                                        onPress={() => handlePersonPress(name)}
+                                    >
+                                        <Text style={styles.personName}>
+                                            {data[name].name}
+                                        </Text>
+                                        <Text style={styles.amount}>
+                                            ${formatNumber(data[name]?.finalTotal)}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
                         </View>
                     </ScrollView>
 
@@ -188,19 +208,25 @@ const ReviewScreen = ({ isDragging, processed, setStep }) => {
                             <View style={styles.summaryContent}>
                                 <View style={styles.summaryRow}>
                                     <Text>Subtotal</Text>
-                                    <Text>${totals.subtotal.toFixed(2)}</Text>
+                                    <Text>${formatNumber(totals.subtotal)}</Text>
                                 </View>
                                 <View style={styles.summaryRow}>
-                                    <Text>Tax (8%)</Text>
-                                    <Text>${totals.tax.toFixed(2)}</Text>
+                                    <Text>Tax</Text>
+                                    <Text>${formatNumber(totals.tax)}</Text>
                                 </View>
                                 <View style={styles.summaryRow}>
-                                    <Text>Tip (18%)</Text>
-                                    <Text>${totals.tip.toFixed(2)}</Text>
+                                    <Text>Tip</Text>
+                                    <Text>${formatNumber(totals.tip)}</Text>
+                                </View>
+                                <View style={styles.summaryRow}>
+                                    <Text>Misc</Text>
+                                    <Text>${formatNumber(totals.misc)}</Text>
                                 </View>
                                 <View style={[styles.summaryRow, styles.totalRow]}>
                                     <Text style={styles.boldText}>Total</Text>
-                                    <Text style={styles.boldText}>${totals.total.toFixed(2)}</Text>
+                                    <Text style={styles.boldText}>
+                                        ${formatNumber(totals.total)}
+                                    </Text>
                                 </View>
                             </View>
                             <View style={styles.dragHandle}>
@@ -260,7 +286,7 @@ const ReviewScreen = ({ isDragging, processed, setStep }) => {
                                     <View style={styles.modalHeader}>
                                         <View style={styles.avatar}>
                                             <Text style={styles.avatarText}>
-                                                {selectedPerson.name[0]}
+                                                {selectedPerson.name?.[0] || ""}
                                             </Text>
                                         </View>
                                         <View style={styles.headerTextContainer}>
@@ -279,30 +305,51 @@ const ReviewScreen = ({ isDragging, processed, setStep }) => {
 
                                     <ScrollView style={styles.modalScroll}>
                                         <View style={styles.itemsContainer}>
-                                            {selectedPerson.items.map((item, index) => (
+                                            {(selectedPerson.items || []).map((item, index) => (
                                                 <View key={index} style={styles.itemRow}>
-                                                    <View>
+                                                    <View style={styles.itemNameContainer}>
                                                         <Text style={styles.itemName}>
-                                                            {item.name}
+                                                            {item?.name || "Unknown Item"}
                                                         </Text>
-                                                        {item.users > 1 && (
+                                                        {item?.users > 1 && (
                                                             <Text style={styles.splitText}>
                                                                 Split {item.users} ways
                                                             </Text>
                                                         )}
                                                     </View>
                                                     <Text style={styles.itemPrice}>
-                                                        ${(item.price / item.users).toFixed(2)}
+                                                        $
+                                                        {formatNumber(
+                                                            (item?.price || 0) / (item?.users || 1)
+                                                        )}
                                                     </Text>
                                                 </View>
                                             ))}
                                         </View>
 
                                         <View style={styles.totalContainer}>
+                                            <View style={styles.summaryRow}>
+                                                <Text>Subtotal</Text>
+                                                <Text>
+                                                    ${formatNumber(selectedPerson.subtotal)}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.summaryRow}>
+                                                <Text>Tax</Text>
+                                                <Text>${formatNumber(selectedPerson.tax)}</Text>
+                                            </View>
+                                            <View style={styles.summaryRow}>
+                                                <Text>Tip</Text>
+                                                <Text>${formatNumber(selectedPerson.tip)}</Text>
+                                            </View>
+                                            <View style={styles.summaryRow}>
+                                                <Text>Misc</Text>
+                                                <Text>${formatNumber(selectedPerson.misc)}</Text>
+                                            </View>
                                             <View style={styles.totalRow}>
-                                                <Text style={styles.totalLabel}>Subtotal</Text>
+                                                <Text style={styles.totalLabel}>Final Total</Text>
                                                 <Text style={styles.totalAmount}>
-                                                    ${selectedPerson.subtotal.toFixed(2)}
+                                                    ${formatNumber(selectedPerson.finalTotal)}
                                                 </Text>
                                             </View>
                                         </View>
@@ -440,6 +487,9 @@ const styles = StyleSheet.create({
         paddingVertical: 3,
     },
     totalRow: {
+        flex: 1,
+        justifyContent: "space-between",
+        flexDirection: "row",
         borderTopWidth: 1,
         borderTopColor: "#e0e0e0",
         paddingTop: 12,
@@ -517,16 +567,24 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: "#e0e0e0",
     },
+    itemNameContainer: {
+        flex: 1,
+        paddingRight: 8,
+        maxWidth: "80%",
+    },
     itemName: {
         fontSize: 16,
         marginBottom: 4,
+        flexWrap: "wrap",
+    },
+    itemPrice: {
+        fontSize: 16,
+        width: 60,
+        textAlign: "right",
     },
     splitText: {
         fontSize: 14,
         color: "#666",
-    },
-    itemPrice: {
-        fontSize: 16,
     },
     totalContainer: {
         padding: 16,
@@ -556,7 +614,7 @@ const styles = StyleSheet.create({
         padding: 8,
         marginLeft: 8,
         marginTop: 4,
-    }
+    },
 });
 
 export default ReviewScreen;

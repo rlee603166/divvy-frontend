@@ -40,13 +40,17 @@ const PeopleToggleButton = ({ name, isSelected, onToggle, isEveryone }) => (
 );
 
 const ReceiptItemView = ({ group, item, onUpdateItem, disabled, setDisabled, isEditMode }) => {
+    useEffect(() => {
+        console.log(group);
+    }, []);
+
     const [priceInput, setPriceInput] = useState(item.price.toString());
     const [nameInput, setNameInput] = useState(item.name);
     const [isExpanded, setIsExpanded] = useState(false);
     const [isEditingPrice, setIsEditingPrice] = useState(false);
     const [isEditingName, setIsEditingName] = useState(false);
     const [selectedPeople, setSelectedPeople] = useState(
-        new Set(item.people?.map(p => p.name) || [])
+        new Set(item.people?.map(p => p.id) || [])
     );
     const expandAnim = useRef(new Animated.Value(0)).current;
     const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -128,17 +132,9 @@ const ReceiptItemView = ({ group, item, onUpdateItem, disabled, setDisabled, isE
     };
 
     const toggleEveryone = () => {
-        const allPeopleNames = group.members.map(person => person.name);
+        const allPeopleIds = group.members.map(person => person.id);
         const isEveryoneSelected = selectedPeople.size === group.members.length;
-
-        let newSelectedPeople;
-        if (isEveryoneSelected) {
-            // If everyone is already selected, deselect all
-            newSelectedPeople = new Set();
-        } else {
-            // Select everyone
-            newSelectedPeople = new Set(allPeopleNames);
-        }
+        const newSelectedPeople = isEveryoneSelected ? new Set() : new Set(allPeopleIds);
 
         setSelectedPeople(newSelectedPeople);
         onUpdateItem(item.id, {
@@ -147,7 +143,7 @@ const ReceiptItemView = ({ group, item, onUpdateItem, disabled, setDisabled, isE
         });
     };
 
-    const togglePerson = ( personName ) => {
+    const togglePerson = personName => {
         const newSelectedPeople = new Set(selectedPeople);
         if (newSelectedPeople.has(personName)) {
             newSelectedPeople.delete(personName);
@@ -260,15 +256,26 @@ const ReceiptItemView = ({ group, item, onUpdateItem, disabled, setDisabled, isE
                             onToggle={toggleEveryone}
                             isEveryone={true}
                         />
-                        {group.members.map(person => (
-                            <PeopleToggleButton
-                                key={person.name}
-                                name={person.name}
-                                isSelected={selectedPeople.has(person.name)}
-                                onToggle={() => togglePerson(person.name)}
-                                isEveryone={false}
-                            />
-                        ))}
+                        {group.members.map(person => {
+                            const firstName = person.name.split(" ")[0];
+                            const duplicateFirstName =
+                                group.members.filter(p => p.name.split(" ")[0] === firstName)
+                                    .length > 1;
+
+                            const displayName = duplicateFirstName
+                                ? `${firstName} (${person.phone})`
+                                : firstName;
+
+                            return (
+                                <PeopleToggleButton
+                                    key={person.id}
+                                    name={displayName}
+                                    isSelected={selectedPeople.has(person.id)}
+                                    onToggle={() => togglePerson(person.id)}
+                                    isEveryone={false}
+                                />
+                            );
+                        })}
                     </ScrollView>
                 </View>
 

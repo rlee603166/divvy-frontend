@@ -22,6 +22,7 @@ import {
 } from "react-native";
 import { X, Plus, UserPlus } from "lucide-react-native";
 import ContactList from "../../components/main/ContactList";
+import AdditionalCharges from "../../components/upload/AdditionalCharges";
 import ReceiptItemView from "../../components/receipt/ReceiptItem";
 import theme, { profileTheme } from "../../theme";
 import ReceiptProcessor from "../../services/ReceiptProcessor";
@@ -212,21 +213,46 @@ const TotalAmountView = ({ totalAmount, isLoading, onSplitBill, disabled }) => (
     </View>
 );
 
-const ReceiptView = ({ isLoading, setStep, onProcessed, selectedPeople, photoUri, ocrData }) => {
+const ReceiptView = ({
+    navigation,
+    isLoading,
+    setStep,
+    onProcessed,
+    selectedPeople,
+    photoUri,
+    ocrData,
+    setPeopleHashMap
+}) => {
     const [transaction, setTransaction] = useState({ ...blankTransaction });
-    const [group, setGroup] = useState({});
+    const [group, setGroup] = useState({
+        members: [],
+    });
+
     const [error, setError] = useState(null);
     const [disableAll, setDisableAll] = useState(false);
-    const [totalAmount, setTotalAmount] = useState(transaction ? transaction.subtotal : 0);
+    const [totalAmount, setTotalAmount] = useState(0);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [isEditMode, setIsEditMode] = useState(false);
     const [fadeAnim] = useState(new Animated.Value(1));
     const [showContactList, setShowContactList] = useState(false);
+    const [showAdditionalCharges, setShowAdditionalCharges] = useState(false);
     const [showPhoto, setShowPhoto] = useState(false);
     const fadeAnim2 = useRef(new Animated.Value(0)).current;
-    const [groupData, setGroupData] = useState(null);
+    const [groupData, setGroupData] = useState(
+        selectedPeople
+            ? {
+                  contacts: selectedPeople.contacts,
+                  friends: selectedPeople.friends,
+                  groups: selectedPeople.groups,
+              }
+            : {
+                  contacts: [],
+                  friends: [],
+                  groups: [],
+              }
+    );
 
-    const receiptService = new ReceiptProcessor();
+    const receiptProcessor = new ReceiptProcessor();
     const state = useUser();
     const name = state;
 
@@ -247,28 +273,48 @@ const ReceiptView = ({ isLoading, setStep, onProcessed, selectedPeople, photoUri
             }
         );
 
-        transformNames(selectedPeople, true);
-        setGroupData(selectedPeople);
-        setTransaction(ocrData);
-
         return () => {
             keyboardWillShow.remove();
             keyboardWillHide.remove();
         };
     }, []);
 
+    useEffect(() => {
+        if (ocrData && Array.isArray(ocrData.items)) {
+            const total = getSubTotal(ocrData.items);
+            setTotalAmount(total);
+            if (selectedPeople) {
+                transformNames(selectedPeople, true);
+                setGroupData(selectedPeople);
+            }
+            setTransaction(ocrData);
+        }
+    }, [ocrData, selectedPeople]);
+
+    const getSubTotal = (items = []) => {
+        if (!Array.isArray(items)) return 0;
+        return items.reduce((total, item) => {
+            const price = typeof item.price === "string" ? parseFloat(item.price) : item.price;
+            return total + (isNaN(price) ? 0 : price);
+        }, 0);
+    };
+
     const transformNames = (newUsers, isInit) => {
-        const users = [
-            ...newUsers.contacts.filter(contact => contact.selected),
-            ...newUsers.friends.filter(friend => friend.selected),
-            ...newUsers.groups.filter(group => group.selected).flatMap(group => group.members),
-        ];
+        const selectedContacts = newUsers?.contacts?.filter(contact => contact.selected) || [];
+        const selectedFriends = newUsers?.friends?.filter(friend => friend.selected) || [];
+        const selectedGroupMembers = (
+            newUsers?.groups?.filter(group => group.selected) || []
+        ).flatMap(group => group.members || []);
+
+        // const users = [...selectedContacts, ...selectedFriends, ...selectedGroupMembers];
+        const users = [...selectedPeople.uniqueMemberIds];
         const newMembers = users.map(user => ({
             id: user.id,
             name: user.name,
         }));
+
         setGroup(prev => ({
-            members: [name, ...newMembers],
+            members: [name, ...users],
         }));
     };
 
@@ -349,10 +395,13 @@ const ReceiptView = ({ isLoading, setStep, onProcessed, selectedPeople, photoUri
         setTotalAmount(newTotal);
     };
 
-    const handleDeleteItem = itemId => {
+    const handleDeleteItem = compositeId => {
         LayoutAnimation.configureNext(customLayoutAnimation);
         setTransaction(prev => {
-            const newItems = prev.items.filter(item => item.id !== itemId);
+            // Extract the numeric ID from the composite key if you're using one
+            const itemId = compositeId.split("-")[0]; // This gets just the id part
+
+            const newItems = prev.items.filter(item => item.id !== Number(itemId)); // Convert back to number if needed
             updateTotalAmount(newItems);
             return {
                 ...prev,
@@ -364,9 +413,10 @@ const ReceiptView = ({ isLoading, setStep, onProcessed, selectedPeople, photoUri
     const handleAddItem = () => {
         const newItemWithId = {
             id: Date.now().toString(),
-            name: "Item", // This will trigger the empty input state
-            price: 0, // This will trigger the empty price input state
+            name: "New Item",
+            price: 0,
             people: [],
+            isNew: true, // Add this flag to identify manually added items
         };
 
         LayoutAnimation.configureNext(customLayoutAnimation);
@@ -383,16 +433,6 @@ const ReceiptView = ({ isLoading, setStep, onProcessed, selectedPeople, photoUri
     const handleBackgroundPress = () => {
         setDisableAll(true);
         Keyboard.dismiss();
-    };
-
-    const handleSplitBill = async () => {
-        try {
-            const result = receiptService.processTransaction(transaction, group);
-            onProcessed(result);
-            setStep(4);
-        } catch (err) {
-            setError(err.message);
-        }
     };
 
     const handleBack = () => {
@@ -417,6 +457,25 @@ const ReceiptView = ({ isLoading, setStep, onProcessed, selectedPeople, photoUri
             easing: Easing.linear,
         }).start(() => {
             setShowPhoto(false);
+        });
+    };
+
+    const handleSplitBill = () => {
+        navigation.navigate("AdditionalCharges", {
+            onSubmit: data => {
+                const fullTransaction = {
+                    ...transaction,
+                    subtotal: totalAmount,
+                    additional: data,
+                };
+                console.log(`Transaction: ${JSON.stringify(fullTransaction, null, 2)}`);
+                console.log(`Group: ${JSON.stringify(group, null, 2)}`);
+                const result = receiptProcessor.processReceipt(fullTransaction, group);
+                setPeopleHashMap(receiptProcessor.getPeopleHashMap());
+                onProcessed(result);
+                setStep(4);
+            },
+            additionalCharges: transaction.addtional,
         });
     };
 
@@ -466,21 +525,20 @@ const ReceiptView = ({ isLoading, setStep, onProcessed, selectedPeople, photoUri
                                 keyboardShouldPersistTaps="handled"
                             >
                                 <Animated.View style={{ opacity: fadeAnim }}>
-                                    {transaction.items.map(item => (
-                                        <View key={item.id} style={styles.itemContainer}>
+                                    {transaction.items.map((item, index) => (
+                                        <View
+                                            key={index}
+                                            style={styles.itemContainer}
+                                        >
                                             <View style={styles.receiptItemWrapper}>
-                                                {groupData ? (
-                                                    <ReceiptItemView
-                                                        group={group}
-                                                        item={item}
-                                                        onUpdateItem={handleUpdate}
-                                                        disabled={disableAll || isEditMode}
-                                                        setDisabled={setDisableAll}
-                                                        isEditMode={isEditMode}
-                                                    />
-                                                ) : (
-                                                    <></>
-                                                )}
+                                                <ReceiptItemView
+                                                    group={group}
+                                                    item={item}
+                                                    onUpdateItem={handleUpdate}
+                                                    disabled={disableAll || isEditMode}
+                                                    setDisabled={setDisableAll}
+                                                    isEditMode={isEditMode}
+                                                />
                                             </View>
                                             {isEditMode && (
                                                 <Pressable
