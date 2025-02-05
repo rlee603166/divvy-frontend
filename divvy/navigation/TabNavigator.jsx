@@ -1,13 +1,18 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
 import HomeNavigator from "./HomeNavigator";
 import ProfileNavigator from "./ProfileNavigation";
-import UploadNavigator from "./UploadNavigator";
+import UploadScreen from "../screens/upload/UploadScreen";
 import theme from "../theme/index.js";
+import { useNavigation } from "@react-navigation/native";
 
 const Tab = createBottomTabNavigator();
+const RootStack = createStackNavigator();
 
-export default function TabNavigator() {
+function TabNavigator() {
+    const navigation = useNavigation();
+    
     return (
         <Tab.Navigator
             initialRouteName="HomeNavigator"
@@ -37,8 +42,16 @@ export default function TabNavigator() {
                 }}
             />
             <Tab.Screen
-                name="UploadNavigator"
-                component={UploadNavigator}
+                name="Upload"
+                component={EmptyComponent}
+                listeners={{
+                    tabPress: (e) => {
+                        // Prevent default action
+                        e.preventDefault();
+                        // Navigate to modal
+                        navigation.navigate('UploadModal');
+                    },
+                }}
                 options={{
                     tabBarLabel: "Upload",
                     tabBarIcon: ({ color, size, focused }) => (
@@ -48,7 +61,6 @@ export default function TabNavigator() {
                             color={theme.colors.primary}
                         />
                     ),
-
                 }}
             />
             <Tab.Screen
@@ -68,3 +80,7 @@ export default function TabNavigator() {
         </Tab.Navigator>
     );
 }
+
+const EmptyComponent = () => null;
+
+export default TabNavigator;

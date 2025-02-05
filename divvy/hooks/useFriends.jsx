@@ -1,99 +1,283 @@
+// // src/context/FriendsContext.js
+// import React, { createContext, useState, useContext } from 'react';
+// import { Alert } from 'react-native';
+
+// const FriendsContext = createContext();
+
+// export function FriendsProvider({ children, initialFriends = [] }) {
+//   // Initialize with the complete friend objects
+//   const [friends, setFriends] = useState(() =>
+//     [...initialFriends].sort((a, b) => a.name.localeCompare(b.name))
+//   );
+
+//   const addFriend = (userOrName, username) => {
+//     let newFriend;
+
+//     if (typeof userOrName === 'object') {
+//       // If we're passed a user object, preserve all properties
+//       const user = userOrName;
+//       newFriend = {
+//         ...user,  // Spread the entire user object to keep all properties
+//         status: user.status || "active"
+//       };
+//     } else {
+//       // If we're passed individual fields
+//       if (!userOrName.trim() || !username.trim()) {
+//         Alert.alert('Error', 'Please fill in both name and username');
+//         return false;
+//       }
+
+//       const formattedUsername = username.trim().startsWith('@')
+//         ? username.trim()
+//         : `@${username.trim()}`;
+
+//       const id = Math.max(...friends.map(f => f.id), 0) + 1;
+
+//       newFriend = {
+//         id,
+//         name: userOrName.trim(),
+//         username: formattedUsername,
+//         status: "active"
+//       };
+//     }
+
+//     // Check for duplicate username
+//     if (friends.some(friend => friend.username.toLowerCase() === newFriend.username.toLowerCase())) {
+//       Alert.alert('Error', 'This username already exists');
+//       return false;
+//     }
+
+//     setFriends(prevFriends =>
+//       [...prevFriends, newFriend].sort((a, b) => a.name.localeCompare(b.name))
+//     );
+//     return true;
+//   };
+
+//   const deleteFriend = (friendId) => {
+//     Alert.alert(
+//       'Remove Friend',
+//       'Are you sure you want to remove this friend?',
+//       [
+//         {
+//           text: 'Cancel',
+//           style: 'cancel',
+//         },
+//         {
+//           text: 'Remove',
+//           style: 'destructive',
+//           onPress: () => {
+//             setFriends(prevFriends =>
+//               prevFriends.filter(friend => friend.id !== friendId)
+//             );
+//           },
+//         },
+//       ]
+//     );
+//   };
+
+//   return (
+//     <FriendsContext.Provider value={{ friends, addFriend, deleteFriend }}>
+//       {children}
+//     </FriendsContext.Provider>
+//   );
+// }
+
+// export function useFriends(initialFriendsList = []) {
+//   const context = useContext(FriendsContext);
+//   if (!context) {
+//     throw new Error('useFriends must be used within a FriendsProvider');
+//   }
+
+//   // If we're called with initialFriends and the context is empty, initialize it
+//   if (initialFriendsList.length > 0 && context.friends.length === 0) {
+//     initialFriendsList.forEach(friend => {
+//       context.addFriend(friend);
+//     });
+//   }
+
+//   return context;
+// }
+
 // src/context/FriendsContext.js
-import React, { createContext, useState, useContext } from 'react';
-import { Alert } from 'react-native';
+import React, { createContext, useState, useContext, useEffect } from "react";
+import { Alert } from "react-native";
+import UserService from "../services/UserService";
+import { useUser } from "../services/UserProvider";
 
 const FriendsContext = createContext();
 
 export function FriendsProvider({ children, initialFriends = [] }) {
-  // Initialize with the complete friend objects
-  const [friends, setFriends] = useState(() => 
-    [...initialFriends].sort((a, b) => a.name.localeCompare(b.name))
-  );
-
-  const addFriend = (userOrName, username) => {
-    let newFriend;
-
-    if (typeof userOrName === 'object') {
-      // If we're passed a user object, preserve all properties
-      const user = userOrName;
-      newFriend = {
-        ...user,  // Spread the entire user object to keep all properties
-        status: user.status || "active"
-      };
-    } else {
-      // If we're passed individual fields
-      if (!userOrName.trim() || !username.trim()) {
-        Alert.alert('Error', 'Please fill in both name and username');
-        return false;
-      }
-
-      const formattedUsername = username.trim().startsWith('@') 
-        ? username.trim() 
-        : `@${username.trim()}`;
-      
-      const id = Math.max(...friends.map(f => f.id), 0) + 1;
-
-      newFriend = {
-        id,
-        name: userOrName.trim(),
-        username: formattedUsername,
-        status: "active"
-      };
-    }
-
-    // Check for duplicate username
-    if (friends.some(friend => friend.username.toLowerCase() === newFriend.username.toLowerCase())) {
-      Alert.alert('Error', 'This username already exists');
-      return false;
-    }
-
-    setFriends(prevFriends => 
-      [...prevFriends, newFriend].sort((a, b) => a.name.localeCompare(b.name))
+    // Initialize with the complete friend objects
+    const [friends, setFriends] = useState(() =>
+        [...initialFriends].sort((a, b) => a.name.localeCompare(b.name))
     );
-    return true;
-  };
 
-  const deleteFriend = (friendId) => {
-    Alert.alert(
-      'Remove Friend',
-      'Are you sure you want to remove this friend?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            setFriends(prevFriends => 
-              prevFriends.filter(friend => friend.id !== friendId)
-            );
-          },
-        },
-      ]
+    const { id } = useUser();
+    const userService = new UserService();
+
+    // Add state for selected friends
+    const [selectedFriends, setSelectedFriends] = useState([]);
+
+    useEffect(() => {
+        if (friends) console.log(friends);
+    }, [friends]);
+
+    useEffect(() => {
+        loadFriends(id);
+    }, []);
+
+    const loadFriends = async id => {
+        const friendsData = await userService.getFriends(id);
+        const data = friendsData.map((friend, index) => {
+            let isLocalImage;
+            if (friend.imageUri) {
+                isLocalImage = !friend.imageUri.startsWith("http");
+            }
+
+            const avatar = isLocalImage
+                ? `${userService.apiURL}/images/pfp/${friend.imageUri}`
+                : friend.imageUri;
+
+            console.log(avatar);
+
+            return {
+                id: friend.user_id,
+                friend_id: friend.friend_id,
+                name: friend.name,
+                phone: `${friend.username}` || "",
+                username: `${friend.username}` || "",
+                avatar: avatar || null,
+                selected: false,
+            };
+        });
+        setFriends(data);
+    };
+
+    const addFriend = (userOrName, username) => {
+        let newFriend;
+
+        if (typeof userOrName === "object") {
+            const user = userOrName;
+            newFriend = {
+                ...user,
+                status: user.status || "active",
+            };
+        } else {
+            if (!userOrName.trim() || !username.trim()) {
+                Alert.alert("Error", "Please fill in both name and username");
+                return false;
+            }
+
+            const formattedUsername = username.trim().startsWith("@")
+                ? username.trim().slice(1)
+                : username.trim();
+
+            const id = Math.max(...friends.map(f => f.id), 0) + 1;
+
+            newFriend = {
+                id,
+                name: userOrName.trim(),
+                username: formattedUsername,
+                status: "active",
+            };
+        }
+
+        if (
+            friends.some(
+                friend => friend.username.toLowerCase() === newFriend.username.toLowerCase()
+            )
+        ) {
+            Alert.alert("Error", "This username already exists");
+            return false;
+        }
+
+        setFriends(prevFriends =>
+            [...prevFriends, newFriend].sort((a, b) => a.name.localeCompare(b.name))
+        );
+
+        try {
+            const data = userService.addFriend(newFriend.id);
+            return true;
+        } catch (error) {
+            console.error(error);
+            return false;
+        }
+    };
+
+    const deleteFriend = friendId => {
+        Alert.alert("Remove Friend", "Are you sure you want to remove this friend?", [
+            {
+                text: "Cancel",
+                style: "cancel",
+            },
+            {
+                text: "Remove",
+                style: "destructive",
+                onPress: () => {
+                    setFriends(prevFriends => prevFriends.filter(friend => friend.id !== friendId));
+                    // Also remove from selected friends if present
+                    setSelectedFriends(prev => prev.filter(id => id !== friendId));
+                    try {
+                        const data = userService.removeFriend(friendId);
+                        return true;
+                    } catch (error) {
+                        console.error(error);
+                        return false;
+                    }
+                },
+            },
+        ]);
+    };
+
+    // Add function to toggle friend selection
+    const toggleFriendSelection = friendId => {
+        setSelectedFriends(prev => {
+            if (prev.includes(friendId)) {
+                return prev.filter(id => id !== friendId);
+            }
+            if (prev.length >= 5) {
+                Alert.alert("Maximum Selection", "You can only select up to 5 friends to display");
+                return prev;
+            }
+            return [...prev, friendId];
+        });
+    };
+
+    // Add function to get selected friends' data
+    const getSelectedFriendsData = () => {
+        if (selectedFriends.length === 0) {
+            return friends.slice(0, 5); // Default to first 5 if none selected
+        }
+        return friends.filter(friend => selectedFriends.includes(friend.id));
+    };
+
+    return (
+        <FriendsContext.Provider
+            value={{
+                friends,
+                addFriend,
+                deleteFriend,
+                selectedFriends,
+                toggleFriendSelection,
+                getSelectedFriendsData,
+            }}
+        >
+            {children}
+        </FriendsContext.Provider>
     );
-  };
-
-  return (
-    <FriendsContext.Provider value={{ friends, addFriend, deleteFriend }}>
-      {children}
-    </FriendsContext.Provider>
-  );
 }
 
 export function useFriends(initialFriendsList = []) {
-  const context = useContext(FriendsContext);
-  if (!context) {
-    throw new Error('useFriends must be used within a FriendsProvider');
-  }
-  
-  // If we're called with initialFriends and the context is empty, initialize it
-  if (initialFriendsList.length > 0 && context.friends.length === 0) {
-    initialFriendsList.forEach(friend => {
-      context.addFriend(friend);
-    });
-  }
-  
-  return context;
+    const context = useContext(FriendsContext);
+    if (!context) {
+        throw new Error("useFriends must be used within a FriendsProvider");
+    }
+
+    if (initialFriendsList.length > 0 && context.friends.length === 0) {
+        initialFriendsList.forEach(friend => {
+            context.addFriend(friend);
+        });
+    }
+
+    return context;
 }

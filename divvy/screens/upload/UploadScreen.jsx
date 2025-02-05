@@ -127,7 +127,7 @@ const UploadScreen = ({ navigation }) => {
         setWrapperIsLoading(true);
         setSelectedPeople(selectedItems);
 
-if (inputType === "manual") {
+        if (inputType === "manual") {
             setStep(3);
             setWrapperIsLoading(false);
             return;
@@ -196,7 +196,7 @@ if (inputType === "manual") {
     const renderStep = () => {
         switch (step) {
             case 0:
-                return <CameraScreen onPictureTaken={handlePictureTaken} />;
+                return <CameraScreen navigation={navigation} onPictureTaken={handlePictureTaken} />;
             case 1:
                 return (
                     <PhotoReview
@@ -234,10 +234,10 @@ if (inputType === "manual") {
                 );
             case 4:
                 return (
-                    <ReviewWrapper 
-                        setStep={setStep} 
-                        processed={processed} 
-                        receiptID={receiptID} 
+                    <ReviewWrapper
+                        setStep={setStep}
+                        processed={processed}
+                        receiptID={receiptID}
                         peopleHashMap={peopleHashMap}
                     />
                 );

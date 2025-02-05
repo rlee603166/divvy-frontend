@@ -1,5 +1,5 @@
 // src/screens/profile/SearchUsersScreen.js
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
     View,
     Text,
@@ -15,122 +15,51 @@ import { Image } from "react-native";
 import { friendTheme } from "../../theme";
 import SearchBar from "../../components/friends/SearchBar";
 import { useFriends } from "../../hooks/useFriends";
-
-const allUsers = [
-  { 
-    id: 1, 
-    name: "Sarah Miller", 
-    username: "@sarahm", 
-    status: "active", 
-    avatar: "https://i.pravatar.cc/150?u=sarah" 
-  },
-  { 
-    id: 2, 
-    name: "Mike Chen", 
-    username: "@mikechen", 
-    status: "active", 
-    avatar: "https://i.pravatar.cc/150?u=mike" 
-  },
-  { 
-    id: 3, 
-    name: "Jordan Lee", 
-    username: "@jlee", 
-    status: "active", 
-    avatar: "https://i.pravatar.cc/150?u=jordan" 
-  },
-  { 
-    id: 4, 
-    name: "Emma Watson", 
-    username: "@emmaw", 
-    status: "active", 
-    avatar: "https://i.pravatar.cc/150?u=emma" 
-  },
-  { 
-    id: 5, 
-    name: "John Smith", 
-    username: "@johnsmith", 
-    status: "active", 
-    avatar: "https://i.pravatar.cc/150?u=john" 
-  },
-  { 
-    id: 6, 
-    name: "Sara Jones", 
-    username: "@saraj", 
-    status: "active", 
-    avatar: "https://i.pravatar.cc/150?u=sara" 
-  },
-  {
-    id: 7,
-    name: "Addison Clark",
-    username: "@addisonc",
-    status: "active",
-    avatar: "https://i.pravatar.cc/150?u=addisonc"
-  },
-  {
-    id: 8,
-    name: "Oliver Johnson",
-    username: "@oliverj",
-    status: "active",
-    avatar: "https://i.pravatar.cc/150?u=oliverj"
-  },
-  {
-    id: 9,
-    name: "Isabella Garcia",
-    username: "@isabellag",
-    status: "active",
-    avatar: "https://i.pravatar.cc/150?u=isabellag"
-  },
-  {
-    id: 10,
-    name: "James Wilson",
-    username: "@jamesw",
-    status: "active",
-    avatar: "https://i.pravatar.cc/150?u=jamesw"
-  },
-];
+import UserService from "../../services/UserService";
+import debounce from "lodash/debounce"; // Corrected import
 
 function SearchUsersScreen({ navigation }) {
-        const [searchQuery, setSearchQuery] = useState("");
+    const [searchQuery, setSearchQuery] = useState("");
     const [isSearching, setIsSearching] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
     const [addedFriends, setAddedFriends] = useState(new Set());
-    
+
     const { friends, addFriend } = useFriends();
+    const userService = new UserService();
 
     useEffect(() => {
-        const delayDebounceFn = setTimeout(() => {
-            if (searchQuery) {
-                handleSearch();
+        debounceQuery(searchQuery);
+    }, [searchQuery]);
+
+    const debounceQuery = useCallback(
+        debounce(query => {
+            if (query.trim().length >= 2) {
+                handleSearch(query);
             } else {
                 setSearchResults([]);
             }
-        }, 300);
+        }, 300),
+        []
+    );
 
-        return () => clearTimeout(delayDebounceFn);
-    }, [searchQuery]);
-
-    const handleSearch = () => {
-        setIsSearching(true);
-
-        // Simulate API call delay
-        setTimeout(() => {
-            const query = searchQuery.toLowerCase();
-            const results = allUsers.filter(user => 
-                user.name.toLowerCase().includes(query) ||
-                user.username.toLowerCase().includes(query)
-            );
-
-            setSearchResults(results);
+    const handleSearch = async query => {
+        try {
+            setIsSearching(true);
+            const data = await userService.search(query);
+            setSearchResults(data);
+        } catch (e) {
+            console.error("Search error:", e);
+        } finally {
             setIsSearching(false);
-        }, 500);
+        }
     };
 
-    const handleAddFriend = (user) => {
+    const handleAddFriend = user => {
         setAddedFriends(prev => new Set([...prev, user.id]));
         addFriend(user);
     };
 
-    const isUserFriend = (user) => {
+    const isUserFriend = user => {
         return friends.some(friend => friend.id === user.id) || addedFriends.has(user.id);
     };
 
@@ -165,7 +94,7 @@ function SearchUsersScreen({ navigation }) {
                             <Text style={styles.noResultsText}>No users found</Text>
                         </View>
                     ) : (
-                        <ScrollView 
+                        <ScrollView
                             style={styles.searchResults}
                             showsVerticalScrollIndicator={false}
                         >
@@ -178,7 +107,9 @@ function SearchUsersScreen({ navigation }) {
                                         />
                                         <View style={styles.userInfo}>
                                             <Text style={styles.userName}>{user.name}</Text>
-                                            <Text style={styles.userUsername}>{user.username}</Text>
+                                            <Text
+                                                style={styles.userUsername}
+                                            >{`@${user.username}`}</Text>
                                         </View>
                                     </View>
                                     {!isUserFriend(user) ? (
@@ -186,7 +117,11 @@ function SearchUsersScreen({ navigation }) {
                                             style={styles.addButton}
                                             onPress={() => handleAddFriend(user)}
                                         >
-                                            <UserPlus width={20} height={20} color={friendTheme.colors.primary} />
+                                            <UserPlus
+                                                width={20}
+                                                height={20}
+                                                color={friendTheme.colors.primary}
+                                            />
                                             <Text style={styles.addButtonText}>Add</Text>
                                         </TouchableOpacity>
                                     ) : (
@@ -253,16 +188,16 @@ const styles = StyleSheet.create({
         color: friendTheme.colors.gray500,
     },
     userItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
         paddingVertical: friendTheme.spacing[4],
         paddingHorizontal: friendTheme.spacing[2],
         marginBottom: friendTheme.spacing[2],
     },
     leftContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: "row",
+        alignItems: "center",
         flex: 1,
     },
     avatar: {
@@ -276,7 +211,7 @@ const styles = StyleSheet.create({
     },
     userName: {
         fontSize: 16,
-        fontWeight: '500',
+        fontWeight: "500",
         color: friendTheme.colors.gray900,
     },
     userUsername: {
@@ -285,8 +220,8 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     addButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: "row",
+        alignItems: "center",
         backgroundColor: friendTheme.colors.indigo50,
         paddingHorizontal: friendTheme.spacing[4],
         paddingVertical: friendTheme.spacing[2],

@@ -10,11 +10,11 @@ export const UserProvider = ({ children }) => {
     // const apiURL = "http://47.144.148.193:8000/api/v1";
 
     const [state, setState] = useState({
-        user_id:1,
+        user_id: 1,
         id: 1,
         accessToken: null,
         username: "@johndoe",
-        phone: '123-455-6789',
+        phone: "123-455-6789",
         isAuthenticated: false,
         isLoading: true,
         error: null,
@@ -24,10 +24,10 @@ export const UserProvider = ({ children }) => {
 
     // Debug useEffect to track state changes
     useEffect(() => {
-        console.log('Auth State Changed:', {
+        console.log("Auth State Changed:", {
             username: state.username,
             isAuthenticated: state.isAuthenticated,
-            isLoading: state.isLoading
+            isLoading: state.isLoading,
         });
     }, [state.username, state.isAuthenticated, state.isLoading]);
 
@@ -35,30 +35,79 @@ export const UserProvider = ({ children }) => {
         checkAuthState();
     }, []);
 
-    const updateProfileImage = (imageUri) => {
+    const updateProfileImage = async imageUri => {
         setState(prev => ({
             ...prev,
-            profileImage: imageUri
+            profileImage: imageUri,
         }));
+
+        try {
+            const response = await fetch(imageUri);
+            const blob = await response.blob();
+
+            const formData = new FormData();
+            const fileExtension = imageUri.split(".").pop() || "jpg";
+
+            formData.append("image", {
+                uri: imageUri,
+                type: "image/*",
+                name: `receipt.${fileExtension}`,
+            });
+
+            const uploadResponse = await fetch(`${apiURL}/users/pfp/${state.id}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+                body: formData,
+            });
+
+            const data = await uploadResponse.json();
+            return data.filepath;
+        } catch (error) {
+            console.error(error);
+            return false;
+        }
     };
 
-    const removeProfileImage = () => {
+    const removeProfileImage = async () => {
         Alert.alert(
-            'Remove Profile Picture',
-            'Are you sure you want to remove your profile picture?',
+            "Remove Profile Picture",
+            "Are you sure you want to remove your profile picture?",
             [
                 {
-                    text: 'Cancel',
-                    style: 'cancel',
+                    text: "Cancel",
+                    style: "cancel",
                 },
                 {
-                    text: 'Remove',
-                    style: 'destructive',
-                    onPress: () => {
-                        setState(prev => ({
-                            ...prev,
-                            profileImage: null
-                        }));
+                    text: "Remove",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const url = `${apiURL}/users/pfp/${state.id}`;
+                            const response = await fetch(url, {
+                                method: "PATCH",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({ imageUri: null }), // Assuming you want to set imageUri to null
+                            });
+
+                            const data = await response.json();
+
+                            if (response.ok) {
+                                // Update state only if the API call is successful
+                                setState(prev => ({
+                                    ...prev,
+                                    profileImage: null,
+                                }));
+                            } else {
+                                // Handle API error
+                                console.error("Failed to remove profile picture:", data);
+                            }
+                        } catch (error) {
+                            console.error("Error removing profile picture:", error);
+                        }
                     },
                 },
             ]
@@ -68,7 +117,7 @@ export const UserProvider = ({ children }) => {
     const loadStoredUsername = async () => {
         try {
             const username = await SecureStore.getItemAsync("username");
-            console.log('Loaded stored username:', username);
+            console.log("Loaded stored username:", username);
             return username;
         } catch (error) {
             console.error("Failed to load stored username:", error);
@@ -79,27 +128,27 @@ export const UserProvider = ({ children }) => {
     const saveUsername = async username => {
         try {
             await SecureStore.setItemAsync("username", username);
-            console.log('Saved username to storage:', username);
+            console.log("Saved username to storage:", username);
         } catch (error) {
             console.error("Failed to save username:", error);
         }
     };
 
     const checkAuthState = async () => {
-        console.log('Starting checkAuthState...');
+        console.log("Starting checkAuthState...");
         try {
             const accessToken = await SecureStore.getItemAsync("access_token");
             const refreshToken = await SecureStore.getItemAsync("refresh_token");
             const username = await loadStoredUsername();
-            
-            console.log('Stored credentials:', { 
-                hasAccessToken: !!accessToken, 
+
+            console.log("Stored credentials:", {
+                hasAccessToken: !!accessToken,
                 hasRefreshToken: !!refreshToken,
-                storedUsername: username 
+                storedUsername: username,
             });
 
             if (!accessToken || !refreshToken) {
-                console.log('No tokens found, setting initial state');
+                console.log("No tokens found, setting initial state");
                 setState(prev => ({
                     ...prev,
                     username: prev.username || username, // Keep existing username if available
@@ -109,7 +158,7 @@ export const UserProvider = ({ children }) => {
             }
 
             const isValidAccessToken = await validateAccessToken(accessToken);
-            console.log('Access token validation:', isValidAccessToken);
+            console.log("Access token validation:", isValidAccessToken);
 
             if (isValidAccessToken) {
                 await loadUserData(accessToken);
@@ -117,12 +166,12 @@ export const UserProvider = ({ children }) => {
             }
 
             const newTokens = await refreshAccessToken(refreshToken);
-            console.log('Token refresh result:', !!newTokens);
+            console.log("Token refresh result:", !!newTokens);
 
             if (newTokens) {
                 await loadUserData(newTokens.access_token);
             } else {
-                console.log('Token refresh failed, logging out');
+                console.log("Token refresh failed, logging out");
                 await logout();
             }
         } catch (error) {
@@ -135,9 +184,9 @@ export const UserProvider = ({ children }) => {
         }
     };
 
-    const loadUserData = async (token) => {
+    const loadUserData = async token => {
         try {
-            console.log('Loading user data with token...');
+            console.log("Loading user data with token...");
             const response = await fetch(`${apiURL}/users/me`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -146,7 +195,7 @@ export const UserProvider = ({ children }) => {
 
             if (response.ok) {
                 const userData = await response.json();
-                console.log('User data loaded:', userData);
+                console.log("User data loaded:", userData);
                 setState(prev => ({
                     ...prev,
                     username: userData.username,
@@ -162,7 +211,7 @@ export const UserProvider = ({ children }) => {
         }
     };
 
-    const validateAccessToken = async (token) => {
+    const validateAccessToken = async token => {
         try {
             const response = await fetch(`${apiURL}/auth/validate-access`, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -173,7 +222,7 @@ export const UserProvider = ({ children }) => {
         }
     };
 
-    const refreshAccessToken = async (refreshToken) => {
+    const refreshAccessToken = async refreshToken => {
         try {
             const response = await fetch(`${apiURL}/auth/refresh`, {
                 method: "POST",
@@ -201,7 +250,7 @@ export const UserProvider = ({ children }) => {
 
     const login = async (username, phone, code) => {
         try {
-            console.log('Attempting login with username:', username);
+            console.log("Attempting login with username:", username);
             const response = await fetch(`${apiURL}/auth/token`, {
                 method: "POST",
                 headers: {
@@ -233,11 +282,11 @@ export const UserProvider = ({ children }) => {
                 isAuthenticated: true,
                 error: null,
             }));
-            console.log('Login successful for username:', username);
+            console.log("Login successful for username:", username);
 
             return true;
         } catch (error) {
-            console.error('Login failed:', error);
+            console.error("Login failed:", error);
             setState(prev => ({
                 ...prev,
                 error: "Login failed",
@@ -246,7 +295,7 @@ export const UserProvider = ({ children }) => {
         }
     };
 
-    const requestVerificationCode = async (username) => {
+    const requestVerificationCode = async username => {
         try {
             const response = await fetch(`${apiURL}/auth/request-code`, {
                 method: "POST",
@@ -275,7 +324,7 @@ export const UserProvider = ({ children }) => {
 
     const logout = async () => {
         try {
-            console.log('Logging out...');
+            console.log("Logging out...");
             await SecureStore.deleteItemAsync("access_token");
             await SecureStore.deleteItemAsync("refresh_token");
             await SecureStore.deleteItemAsync("username");
@@ -289,7 +338,7 @@ export const UserProvider = ({ children }) => {
                 name: "Alex Johnson",
                 profileImage: null,
             });
-            console.log('Logout complete');
+            console.log("Logout complete");
         } catch (error) {
             console.error("Logout failed:", error);
         }

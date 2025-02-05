@@ -19,9 +19,10 @@ export default function FriendsScreen({ navigation }) {
     const [searchQuery, setSearchQuery] = useState("");
     const { friends, deleteFriend } = useFriends();
 
-    const filteredFriends = friends.filter(friend =>
-        friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        friend.username.toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredFriends = friends.filter(
+        friend =>
+            friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            friend.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     return (
@@ -48,7 +49,7 @@ export default function FriendsScreen({ navigation }) {
                     <View style={styles.buttonContainer}>
                         <TouchableOpacity
                             style={styles.addButton}
-                            onPress={() => navigation.navigate('SearchUsers')}
+                            onPress={() => navigation.navigate("SearchUsers")}
                         >
                             <UserPlus width={20} height={20} color={friendTheme.colors.primary} />
                             <Text style={styles.addButtonText}>Add New Friend</Text>
@@ -61,7 +62,7 @@ export default function FriendsScreen({ navigation }) {
                                 All Friends • {filteredFriends.length}
                             </Text>
 
-                            <ScrollView 
+                            <ScrollView
                                 style={styles.friendsList}
                                 showsVerticalScrollIndicator={false}
                             >
@@ -95,7 +96,6 @@ export default function FriendsScreen({ navigation }) {
         </SafeAreaView>
     );
 }
-
 
 const styles = StyleSheet.create({
     safeArea: {
@@ -164,8 +164,8 @@ const styles = StyleSheet.create({
     },
     emptyContainer: {
         flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
+        alignItems: "center",
+        justifyContent: "center",
         padding: friendTheme.spacing[4],
         backgroundColor: friendTheme.colors.white,
         borderRadius: 16,
@@ -173,16 +173,14 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: "600",
         color: friendTheme.colors.gray900,
         marginTop: friendTheme.spacing[4],
     },
     emptySubtext: {
         fontSize: 14,
         color: friendTheme.colors.gray600,
-        textAlign: 'center',
+        textAlign: "center",
         marginTop: friendTheme.spacing[2],
     },
-
-
 });

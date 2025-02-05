@@ -97,6 +97,7 @@ const CameraScreen = ({ onPictureTaken }) => {
                 {/* Top Controls */}
                 <SafeAreaView style={styles.topControls}>
                     <TouchableOpacity>
+                        
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.topButton} onPress={toggleFlash}>
                         <Flashlight {...getFlashIcon()} />

@@ -8,11 +8,13 @@ import UploadNavigator from "./UploadNavigator";
 import ContactList from "../components/main/ContactList";
 import AuthNavigator from "./AuthNavigator";
 import { useUser } from "../services/UserProvider";
+import { useFriends } from "../hooks/useFriends";
 
 const App = createNativeStackNavigator();
 
 export default function AppNavigation() {
     const { isAuthenticated } = useUser();
+    const { friends, isLoading, error, addFriend } = useFriends();
 
     return (
         <NavigationContainer>
@@ -20,7 +22,21 @@ export default function AppNavigation() {
                 {isAuthenticated ? (
                     <App.Screen name="Main" component={AuthNavigator} />
                 ) : (
-                    <App.Screen name="Auth" component={UploadNavigator} />
+                    <>
+                        <App.Screen name="Auth" component={TabNavigator} />
+                        <App.Screen
+                            name="UploadModal"
+                            component={UploadScreen}
+                            options={{
+                                presentation: "fullScreenModal",
+                                animation: "default",
+                                animationDuration: 300,
+                                animationTypeForReplace: "push",
+                                gestureEnabled: true,
+                                gestureDirection: "vertical",
+                            }}
+                        />
+                    </>
                 )}
             </App.Navigator>
         </NavigationContainer>
