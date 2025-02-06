@@ -3,8 +3,8 @@ import { useUser } from "./UserProvider";
 
 class UserService {
     constructor() {
-        this.apiURL = "http://127.0.0.1:8000/api/v1";
-        // this.apiURL = "http://47.144.148.193:8000/api/v1";
+        // this.apiURL = "http://127.0.0.1:8000/api/v1";
+        this.apiURL = "http://47.144.148.193:8000/api/v1";
         this.state = useUser();
     }
 

@@ -2,8 +2,8 @@ import FormData from "form-data";
 
 class ReceiptService {
     constructor() {
-        // this.apiUrl = "http://47.144.148.193:8000/api/v1";
-        this.apiUrl = "http://127.0.0.1:8000/api/v1";
+        this.apiUrl = "http://47.144.148.193:8000/api/v1";
+        // this.apiUrl = "http://127.0.0.1:8000/api/v1";
     }
 
     async upload(photoUri, user_id) {

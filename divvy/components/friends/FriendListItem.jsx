@@ -13,6 +13,7 @@ export function FriendListItem({ friend, onPress, onDelete }) {
             .toUpperCase();
     };
 
+
     return (
         <SwipeableRow onDelete={() => onDelete(friend.id)}>
             <TouchableOpacity
