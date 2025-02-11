@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import ReceiptProcessor, { Person } from '../../services/ReceiptProcessor';
+import ReceiptProcessor, { Person } from "../../services/ReceiptProcessor";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {
     View,
@@ -14,26 +14,29 @@ import {
     Easing,
 } from "react-native";
 import theme from "../../theme";
-import { Image } from 'expo-image';
+import { useUser } from "../../services/UserProvider";
+import { Image } from "expo-image";
 
 const calculateTotals = data => {
-    if (!data || typeof data !== 'object') {
+    if (!data || typeof data !== "object") {
         return { subtotal: 0, tax: 0, tip: 0, misc: 0, total: 0 };
     }
 
     const personTotals = Object.entries(data)
         .filter(([key, value]) => value instanceof Person)
-        .reduce((acc, [_, person]) => ({
-            subtotal: acc.subtotal + person.subtotal,
-            tax: acc.tax + person.tax,
-            tip: acc.tip + person.tip,
-            misc: acc.misc + person.misc
-        }), { subtotal: 0, tax: 0, tip: 0, misc: 0 });
+        .reduce(
+            (acc, [_, person]) => ({
+                subtotal: acc.subtotal + person.subtotal,
+                tax: acc.tax + person.tax,
+                tip: acc.tip + person.tip,
+                misc: acc.misc + person.misc,
+            }),
+            { subtotal: 0, tax: 0, tip: 0, misc: 0 }
+        );
 
     return {
         ...personTotals,
-        total: personTotals.subtotal + personTotals.tax + 
-               personTotals.tip + personTotals.misc
+        total: personTotals.subtotal + personTotals.tax + personTotals.tip + personTotals.misc,
     };
 };
 
@@ -55,13 +58,13 @@ const AnimatedSwipeText = ({ isDragging, style }) => {
     );
 };
 
-const ReviewScreen = ({ 
-    isDragging, 
-    processed, 
-    setStep, 
+const ReviewScreen = ({
+    isDragging,
+    processed,
+    setStep,
     peopleHashMap,
-    modalVisible,      // Add this prop
-    setModalVisible    // Add this prop
+    modalVisible, // Add this prop
+    setModalVisible, // Add this prop
 }) => {
     const [selectedPerson, setSelectedPerson] = useState(null);
     const [data, setData] = useState({});
@@ -76,6 +79,8 @@ const ReviewScreen = ({
     const slideAnim = useRef(new Animated.Value(Dimensions.get("window").height)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const bounceAnim = useRef(new Animated.Value(0)).current;
+
+    const { avatar } = useUser();
 
     useEffect(() => {
         const startBounceAnimation = () => {
@@ -126,14 +131,14 @@ const ReviewScreen = ({
 
     const handlePersonPress = name => {
         if (!data[name]) return;
-        
+
         // Reset animation values before opening
         slideAnim.setValue(Dimensions.get("window").height);
         fadeAnim.setValue(0);
-        
+
         setSelectedPerson(data[name]);
         setModalVisible(true);
-        
+
         Animated.parallel([
             Animated.timing(slideAnim, {
                 toValue: 0,
@@ -151,7 +156,7 @@ const ReviewScreen = ({
     const handleCloseModal = () => {
         setModalVisible(false);
         setSelectedPerson(null);
-        
+
         Animated.parallel([
             Animated.timing(slideAnim, {
                 toValue: Dimensions.get("window").height,
@@ -180,32 +185,37 @@ const ReviewScreen = ({
         );
     }
 
-    const getPersonImage = (personName) => {
-        console.log('peopleHashMap:', peopleHashMap);
-        console.log('looking for person:', personName);
-        
+    const getPersonImage = personName => {
+        console.log("peopleHashMap:", peopleHashMap);
+        console.log("looking for person:", personName);
+
         if (!peopleHashMap || !personName) {
-            console.log('peopleHashMap or personName is missing');
+            console.log("peopleHashMap or personName is missing");
             return null;
         }
-        
+
         const person = peopleHashMap[personName];
-        console.log('found person:', person);
-        
+        console.log("found person:", person);
+
         if (!person) {
-            console.log('person not found in hashmap');
+            console.log("person not found in hashmap");
             return null;
         }
-        
+
+        let imageSource;
         // Check each possible image property
-        const imageSource = person.imageUri || person.profileImage || person.image;
-        console.log('image source found:', imageSource);
-        
+        if (person.id === "you") {
+            imageSource = avatar;
+        } else {
+            imageSource = person.avatar || person.profileImage || person.image;
+        }
+        console.log("image source found:", imageSource);
+
         return imageSource;
     };
 
-    const getInitials = (name) => {
-        if (!name) return '';
+    const getInitials = name => {
+        if (!name) return "";
         const words = name.trim().split(/\s+/);
         if (words.length === 1) {
             // If single word, take up to first two characters
@@ -217,21 +227,21 @@ const ReviewScreen = ({
 
     return (
         <View style={{ flex: 1 }}>
-            <View style={{ flex: 0, backgroundColor: '#fafafa' }}>
-                <SafeAreaView style={{ flex: 0 }} edges={['top']} />
+            <View style={{ flex: 0, backgroundColor: "#fafafa" }}>
+                <SafeAreaView style={{ flex: 0 }} edges={["top"]} />
             </View>
-            
-            <View style={[styles.mainContainer, { backgroundColor: '#fafafa' }]}>
+
+            <View style={[styles.mainContainer, { backgroundColor: "#fafafa" }]}>
                 <View style={styles.header}>
                     <TouchableOpacity style={styles.backButton} onPress={() => setStep(3)}>
                         <Ionicons name="chevron-back" size={28} color={theme.colors.primary} />
                     </TouchableOpacity>
                     <Text style={styles.title}>Receipt Review</Text>
                 </View>
-    
+
                 <View style={styles.content}>
                     <Text style={styles.sectionTitle}>Individual Shares</Text>
-                    
+
                     <ScrollView style={styles.sharesList}>
                         {Object.entries(data)
                             .filter(([key]) => !["tax", "tip", "misc"].includes(key))
@@ -251,7 +261,7 @@ const ReviewScreen = ({
                                 </TouchableOpacity>
                             ))}
                     </ScrollView>
-    
+
                     <View style={styles.summary}>
                         <Text style={styles.summaryTitle}>Summary</Text>
                         <View style={styles.summaryContent}>
@@ -269,26 +279,33 @@ const ReviewScreen = ({
                             <View style={[styles.summaryRow, styles.totalRow]}>
                                 <Text style={styles.boldText}>Total</Text>
                                 <Text style={styles.boldText}>
-                                    ${formatNumber(totals.subtotal + totals.tax + totals.tip + totals.misc)}
+                                    $
+                                    {formatNumber(
+                                        totals.subtotal + totals.tax + totals.tip + totals.misc
+                                    )}
                                 </Text>
                             </View>
                         </View>
-                        
+
                         <View style={styles.swipeIndicator}>
-                            <Animated.Text style={[
-                                styles.chevron, 
-                                { transform: [{ translateY: bounceAnim }] }
-                            ]}>︿</Animated.Text>
+                            <Animated.Text
+                                style={[
+                                    styles.chevron,
+                                    { transform: [{ translateY: bounceAnim }] },
+                                ]}
+                            >
+                                ︿
+                            </Animated.Text>
                             <AnimatedSwipeText isDragging={isDragging} />
                         </View>
                     </View>
                 </View>
             </View>
-    
+
             <View style={{ flex: 0, backgroundColor: theme.colors.primary }}>
-                <SafeAreaView style={{ flex: 0 }} edges={['bottom']} />
+                <SafeAreaView style={{ flex: 0 }} edges={["bottom"]} />
             </View>
-    
+
             {modalVisible && selectedPerson && (
                 <Modal
                     transparent={true}
@@ -301,17 +318,17 @@ const ReviewScreen = ({
                         <Animated.View
                             style={[
                                 styles.modalContent,
-                                { 
+                                {
                                     opacity: fadeAnim,
-                                    transform: [{ translateY: slideAnim }] 
-                                }
+                                    transform: [{ translateY: slideAnim }],
+                                },
                             ]}
                         >
                             <View style={styles.modalHeader}>
                                 <View style={styles.avatar}>
                                     {(() => {
                                         const imageSource = getPersonImage(selectedPerson.name);
-                                        
+
                                         return imageSource ? (
                                             <Image
                                                 source={{ uri: imageSource }}
@@ -330,11 +347,9 @@ const ReviewScreen = ({
                                     <Text style={styles.headerTitle}>
                                         {selectedPerson.name}'s Share
                                     </Text>
-                                    <Text style={styles.headerSubtitle}>
-                                        Order Details
-                                    </Text>
+                                    <Text style={styles.headerSubtitle}>Order Details</Text>
                                 </View>
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     onPress={handleCloseModal}
                                     style={styles.closeButton}
                                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -342,8 +357,8 @@ const ReviewScreen = ({
                                     <Text style={styles.closeButtonText}>✕</Text>
                                 </TouchableOpacity>
                             </View>
-    
-                            <ScrollView 
+
+                            <ScrollView
                                 style={styles.modalScroll}
                                 contentContainerStyle={styles.modalScrollContent}
                                 showsVerticalScrollIndicator={true}
@@ -369,18 +384,21 @@ const ReviewScreen = ({
                                                 )}
                                             </View>
                                             <Text style={styles.itemPrice}>
-                                                ${formatNumber((item?.price || 0) / (item?.users || 1))}
+                                                $
+                                                {formatNumber(
+                                                    (item?.price || 0) / (item?.users || 1)
+                                                )}
                                             </Text>
                                         </View>
                                     ))}
                                 </View>
-    
+
                                 <View style={styles.modalSummary}>
                                     {[
                                         ["Subtotal", selectedPerson.subtotal],
                                         ["Tax", selectedPerson.tax],
                                         ["Tip", selectedPerson.tip],
-                                        ["Misc", selectedPerson.misc]
+                                        ["Misc", selectedPerson.misc],
                                     ].map(([label, value]) => (
                                         <View key={label} style={styles.summaryRow}>
                                             <Text>{label}</Text>
@@ -395,11 +413,8 @@ const ReviewScreen = ({
                                     </View>
                                 </View>
                             </ScrollView>
-    
-                            <TouchableOpacity 
-                                style={styles.doneButton}
-                                onPress={handleCloseModal}
-                            >
+
+                            <TouchableOpacity style={styles.doneButton} onPress={handleCloseModal}>
                                 <Text style={styles.doneButtonText}>Done</Text>
                             </TouchableOpacity>
                         </Animated.View>
@@ -427,8 +442,8 @@ const styles = StyleSheet.create({
 
     // Header styles
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: "row",
+        alignItems: "center",
         paddingHorizontal: 10,
         paddingVertical: 20,
     },
@@ -476,8 +491,8 @@ const styles = StyleSheet.create({
         fontWeight: "500",
     },
     amountContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: "row",
+        alignItems: "center",
         gap: 4,
     },
     amount: {
@@ -487,7 +502,7 @@ const styles = StyleSheet.create({
 
     // Summary section styles
     summary: {
-        backgroundColor: 'white',
+        backgroundColor: "white",
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         borderBottomLeftRadius: 20,
@@ -568,15 +583,15 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: '#f0f0f0',
+        backgroundColor: "#f0f0f0",
         justifyContent: "center",
         alignItems: "center",
         marginRight: 12,
-        overflow: 'hidden',
+        overflow: "hidden",
     },
     avatarImage: {
-        width: '100%',
-        height: '100%',
+        width: "100%",
+        height: "100%",
     },
     avatarText: {
         fontSize: 18,
