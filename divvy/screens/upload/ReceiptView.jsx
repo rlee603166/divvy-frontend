@@ -227,7 +227,7 @@ const ReceiptView = ({
                 name: user.name,
                 phone: user.phone || user.phoneNumbers?.[0]?.number,
                 phoneNumbers: user.phoneNumbers,
-                avatar: user.imageUri,
+                avatar: user.avatar,
                 profileImage: user.profileImage,
                 image: user.image,
             };
