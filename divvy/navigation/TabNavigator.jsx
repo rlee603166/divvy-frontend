@@ -3,19 +3,23 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
 import HomeNavigator from "./HomeNavigator";
 import ProfileNavigator from "./ProfileNavigation";
-import UploadScreen from "../screens/upload/UploadScreen";
+import UploadNavigator from "./UploadNavigator";
 import theme from "../theme/index.js";
 import { useNavigation } from "@react-navigation/native";
+import { FriendsProvider } from "../hooks/useFriends";
+import { GroupsProvider } from "../context/GroupsContext";
+
+import UploadScreen from "../screens/upload/UploadScreen";
 
 const Tab = createBottomTabNavigator();
 const RootStack = createStackNavigator();
 
 function TabNavigator() {
     const navigation = useNavigation();
-    
+
     return (
         <Tab.Navigator
-            initialRouteName="HomeNavigator"
+            initialRouteName="Upload"
             screenOptions={({ route }) => ({
                 tabBarShowLabel: true,
                 tabBarActiveTintColor: theme.colors.primary,
@@ -28,30 +32,8 @@ function TabNavigator() {
             })}
         >
             <Tab.Screen
-                name="HomeNavigator"
-                component={HomeNavigator}
-                options={{
-                    tabBarLabel: "Home",
-                    tabBarIcon: ({ color, size, focused }) => (
-                        <Ionicons
-                            name={focused ? "home" : "home-outline"}
-                            size={24}
-                            color={theme.colors.primary}
-                        />
-                    ),
-                }}
-            />
-            <Tab.Screen
                 name="Upload"
-                component={EmptyComponent}
-                listeners={{
-                    tabPress: (e) => {
-                        // Prevent default action
-                        e.preventDefault();
-                        // Navigate to modal
-                        navigation.navigate('UploadModal');
-                    },
-                }}
+                component={UploadScreen}
                 options={{
                     tabBarLabel: "Upload",
                     tabBarIcon: ({ color, size, focused }) => (

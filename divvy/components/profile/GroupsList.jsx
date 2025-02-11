@@ -6,8 +6,7 @@ import { profileTheme } from "../../theme";
 import { useGroups } from "../../context/GroupsContext";
 import { useNavigation } from "@react-navigation/native";
 
-const GroupsList = () => {
-    const navigation = useNavigation();
+const GroupsList = ({ navigation }) => {
     const { groups } = useGroups();
 
     const handleGroupPress = group => {
@@ -56,7 +55,9 @@ const GroupsList = () => {
                             <View style={styles.groupInfo}>
                                 <View style={styles.groupHeader}>
                                     <Text style={styles.groupName}>{group.name}</Text>
-                                    <Text style={styles.membersCount}>{group.members.length} members</Text>
+                                    <Text style={styles.membersCount}>
+                                        {group.members.length} members
+                                    </Text>
                                 </View>
                             </View>
                         </TouchableOpacity>

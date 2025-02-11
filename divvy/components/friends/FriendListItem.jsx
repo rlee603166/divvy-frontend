@@ -1,10 +1,10 @@
 // components/friends/FriendListItem.js
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
-import SwipeableRow from "./SwipeableRow";
+import { Check } from "lucide-react-native";
 import { friendTheme } from "../../theme";
 
-export function FriendListItem({ friend, onPress, onDelete }) {
+export function FriendListItem({ friend, onPress, editMode, selected, onSelect }) {
     const getInitials = name => {
         return name
             .split(" ")
@@ -13,54 +13,60 @@ export function FriendListItem({ friend, onPress, onDelete }) {
             .toUpperCase();
     };
 
+    // In edit mode, tapping toggles selection.
+    // Otherwise, it triggers the normal onPress callback.
+    const handlePress = () => {
+        if (editMode && onSelect) {
+            onSelect(friend.id);
+        } else if (onPress) {
+            onPress(friend);
+        }
+    };
 
     return (
-        <SwipeableRow onDelete={() => onDelete(friend.id)}>
-            <TouchableOpacity
-                onPress={() => onPress(friend)}
-                activeOpacity={0.7}
-                style={styles.friendItem}
-            >
-                <View style={styles.avatarContainer}>
-                    {friend?.avatar ? (
-                        <Image
-                            source={{ uri: friend.avatar }}
-                            style={styles.avatarImage}
-                            onError={e => {
-                                console.error("Image loading error:", e.nativeEvent.error);
-                            }}
-                            onLoad={() => console.log("Image loaded successfully")}
-                        />
-                    ) : (
-                        <Text style={styles.avatarText}>{getInitials(friend.name)}</Text>
-                    )}
-                </View>
-
-                <View style={styles.infoContainer}>
-                    <Text style={styles.name} numberOfLines={1}>
-                        {friend.name}
-                    </Text>
-                    <Text style={styles.username} numberOfLines={1}>
-                        {`@${friend.username}`}
-                    </Text>
-                </View>
-
-                <View style={styles.statusContainer}>
-                    <View
-                        style={[
-                            styles.statusDot,
-                            {
-                                backgroundColor:
-                                    friend.status === "active"
-                                        ? friendTheme.colors.green500
-                                        : friendTheme.colors.gray300,
-                            },
-                        ]}
+        <TouchableOpacity
+            onPress={handlePress}
+            activeOpacity={0.7}
+            style={[styles.friendItem, editMode && selected ? styles.selectedItem : null]}
+        >
+            <View style={styles.avatarContainer}>
+                {friend?.avatar ? (
+                    <Image
+                        source={{ uri: friend.avatar }}
+                        style={styles.avatarImage}
+                        onError={e => {
+                            console.error("Image loading error:", e.nativeEvent.error);
+                        }}
+                        onLoad={() => console.log("Image loaded successfully")}
                     />
-                    <Text style={styles.statusText}>{friend.status}</Text>
+                ) : (
+                    <Text style={styles.avatarText}>{getInitials(friend.name)}</Text>
+                )}
+            </View>
+
+            <View style={styles.infoContainer}>
+                <Text style={styles.name} numberOfLines={1}>
+                    {friend.name}
+                </Text>
+                <Text style={styles.username} numberOfLines={1}>
+                    {friend.username}
+                </Text>
+            </View>
+
+            {editMode && (
+                <View
+                    style={[
+                        styles.checkboxContainer,
+                        selected && {
+                            backgroundColor: friendTheme.colors.primary,
+                            borderColor: friendTheme.colors.primary,
+                        },
+                    ]}
+                >
+                    {selected && <Check width={16} height={16} color={friendTheme.colors.white} />}
                 </View>
-            </TouchableOpacity>
-        </SwipeableRow>
+            )}
+        </TouchableOpacity>
     );
 }
 
@@ -70,7 +76,12 @@ const styles = StyleSheet.create({
         alignItems: "center",
         padding: friendTheme.spacing[3],
         backgroundColor: friendTheme.colors.white,
+        borderBottomWidth: 1,
+        borderBottomColor: friendTheme.colors.gray50,
     },
+    // selectedItem: {
+    //   backgroundColor: friendTheme.colors.indigo50,
+    // },
     avatarContainer: {
         width: 48,
         height: 48,
@@ -104,21 +115,14 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: friendTheme.colors.gray500,
     },
-    statusContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        paddingLeft: friendTheme.spacing[2],
-    },
-    statusDot: {
-        width: 8,
-        height: 8,
+    checkboxContainer: {
+        width: 18,
+        height: 18,
+        borderWidth: 1,
+        borderColor: friendTheme.colors.gray400,
         borderRadius: 4,
-        marginRight: friendTheme.spacing[1],
-    },
-    statusText: {
-        fontSize: 12,
-        color: friendTheme.colors.gray500,
-        textTransform: "capitalize",
+        justifyContent: "center",
+        alignItems: "center",
     },
 });
 

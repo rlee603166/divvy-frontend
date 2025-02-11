@@ -8,8 +8,6 @@ class UserService {
         this.state = useUser();
     }
 
-    
-
     async getFriends(userID) {
         try {
             const url = `${this.apiURL}/users/friends/${userID}`;
@@ -52,9 +50,7 @@ class UserService {
                     user_2: userID,
                 }),
             });
-        } catch (error) {
-
-        }
+        } catch (error) {}
     }
 
     async getGroups(userID) {
@@ -198,16 +194,49 @@ class UserService {
     async search(query) {
         const response = await fetch(`${this.apiURL}/users/search/${query}`);
         const searchData = await response.json();
-        const data = searchData.map((user, index) => ({
-            id: user.user_id,
-            name: user.name,
-            phone: `${user.username}` || "",
-            username: `${user.username}` || "",
-            avatar: user.imageUri || null,
-            selected: false,
-            status: "active",
-        }));
+        const data = searchData.map((friend, index) => {
+            let isLocalImage;
+            if (friend.imageUri) {
+                isLocalImage = !friend.imageUri.startsWith("http");
+            }
+
+            const avatar = isLocalImage
+                ? `${userService.apiURL}/images/pfp/${friend.imageUri}`
+                : friend.imageUri;
+
+            console.log(avatar);
+
+            return {
+                id: friend.user_id,
+                friend_id: friend.friend_id,
+                name: friend.name,
+                phone: `${friend.username}` || "",
+                username: `${friend.username}` || "",
+                avatar: avatar || null,
+                selected: false,
+            };
+        });
         return data;
+    }
+
+    async getSMS(phone) {
+        try {
+            const url = `${this.apiURL}/users/sms`;
+            console.log(url)
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ phone: phone }),
+            });
+
+            const data = response.json();
+            return data;
+        } catch {
+            console.error(error);
+            return false;
+        }
     }
 }
 

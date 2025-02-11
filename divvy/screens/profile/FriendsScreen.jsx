@@ -17,13 +17,39 @@ import { useFriends } from "../../hooks/useFriends";
 
 export default function FriendsScreen({ navigation }) {
     const [searchQuery, setSearchQuery] = useState("");
-    const { friends, deleteFriend } = useFriends();
+    const [editMode, setEditMode] = useState(false);
+    const [selectedFriends, setSelectedFriends] = useState([]);
+    const { friends, deleteFriend, deleteFriends } = useFriends();
 
     const filteredFriends = friends.filter(
         friend =>
             friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             friend.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    const toggleEditMode = () => {
+        if (editMode) {
+            // Exiting edit mode clears any selections.
+            setSelectedFriends([]);
+        }
+        setEditMode(!editMode);
+    };
+
+    const toggleSelection = friendId => {
+        if (selectedFriends.includes(friendId)) {
+            setSelectedFriends(selectedFriends.filter(id => id !== friendId));
+        } else {
+            setSelectedFriends([...selectedFriends, friendId]);
+        }
+    };
+
+    const handleDeleteSelected = () => {
+        // Use the combined delete function for batch deletion with one confirmation.
+        deleteFriend(selectedFriends);
+        // Optionally, clear selections and exit edit mode after deletion:
+        setSelectedFriends([]);
+        setEditMode(false);
+    };
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -58,9 +84,16 @@ export default function FriendsScreen({ navigation }) {
 
                     {friends.length > 0 ? (
                         <>
-                            <Text style={styles.listHeader}>
-                                All Friends • {filteredFriends.length}
-                            </Text>
+                            <View style={styles.listHeaderContainer}>
+                                <Text style={styles.listHeaderText}>
+                                    All Friends • {filteredFriends.length}
+                                </Text>
+                                <TouchableOpacity onPress={toggleEditMode}>
+                                    <Text style={styles.editButtonText}>
+                                        {editMode ? "Done" : "Edit"}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
 
                             <ScrollView
                                 style={styles.friendsList}
@@ -70,8 +103,14 @@ export default function FriendsScreen({ navigation }) {
                                     <FriendListItem
                                         key={friend.id}
                                         friend={friend}
-                                        onPress={() => console.log("Friend pressed:", friend)}
-                                        onDelete={() => deleteFriend(friend.id)}
+                                        onPress={() => {
+                                            if (!editMode) {
+                                                console.log("Friend pressed:", friend);
+                                            }
+                                        }}
+                                        editMode={editMode}
+                                        selected={selectedFriends.includes(friend.id)}
+                                        onSelect={toggleSelection}
                                     />
                                 ))}
 
@@ -81,6 +120,17 @@ export default function FriendsScreen({ navigation }) {
                                     </View>
                                 )}
                             </ScrollView>
+
+                            {editMode && selectedFriends.length > 0 && (
+                                <View style={styles.deleteButtonContainer}>
+                                    <TouchableOpacity
+                                        style={styles.deleteButton}
+                                        onPress={handleDeleteSelected}
+                                    >
+                                        <Text style={styles.deleteButtonText}>Remove Selected</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
                         </>
                     ) : (
                         <View style={styles.emptyContainer}>
@@ -143,11 +193,22 @@ const styles = StyleSheet.create({
         fontWeight: "500",
         color: friendTheme.colors.primary,
     },
-    listHeader: {
+    listHeaderContainer: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: friendTheme.spacing[4],
+    },
+    listHeaderText: {
         fontSize: 14,
         fontWeight: "500",
         color: friendTheme.colors.gray500,
-        marginBottom: friendTheme.spacing[4],
+    },
+    editButtonText: {
+        fontSize: 14,
+        fontWeight: "500",
+        marginRight: 4,
+        color: friendTheme.colors.primary,
     },
     friendsList: {
         flex: 1,
@@ -182,5 +243,23 @@ const styles = StyleSheet.create({
         color: friendTheme.colors.gray600,
         textAlign: "center",
         marginTop: friendTheme.spacing[2],
+    },
+    deleteButtonContainer: {
+        marginTop: friendTheme.spacing[4],
+        // Removed alignItems so that the button can stretch full width
+    },
+    deleteButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: friendTheme.colors.red500,
+        padding: friendTheme.spacing[4],
+        borderRadius: 16,
+        width: "100%",
+    },
+    deleteButtonText: {
+        color: friendTheme.colors.white,
+        fontSize: 16,
+        fontWeight: "600",
     },
 });

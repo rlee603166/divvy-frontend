@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
     Alert,
-    Easing,
     View,
     Text,
     ScrollView,
@@ -20,14 +19,17 @@ import {
     Dimensions,
     Image,
 } from "react-native";
-import { X, Plus, UserPlus } from "lucide-react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { X, Plus, UserPlus, ReceiptText } from "lucide-react-native";
 import ContactList from "../../components/main/ContactList";
-import AdditionalCharges from "../../components/upload/AdditionalCharges";
 import ReceiptItemView from "../../components/receipt/ReceiptItem";
-import theme, { profileTheme } from "../../theme";
-import ReceiptProcessor from "../../services/ReceiptProcessor";
+import UserSelector from "../../components/receipt/UserSelector";
+import InstructionBanner from "../../components/receipt/InstructionBanner";
+import theme from "../../theme";
+import ReceiptProcessor, { Item } from "../../services/ReceiptProcessor";
 
 import { useUser } from "../../services/UserProvider";
+import NewItemModal from "../../components/receipt/NewItemModal";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -51,139 +53,50 @@ const customLayoutAnimation = {
     },
 };
 
-const springConfig = {
-    duration: 250,
-    update: {
-        type: LayoutAnimation.Types.easeInEaseOut,
-        springDamping: 0.7,
-    },
-};
-
-const mockGroup = {
-    id: "1",
-    name: "Dinner Group",
-    members: [
-        { id: "1", name: "John" },
-        { id: "2", name: "Alice" },
-        { id: "3", name: "Bob" },
-    ],
-};
-
-const blankTransaction = {
-    id: "1",
-    subtotal: 0,
-    items: [],
-};
-
-const mockTransaction = {
-    id: "1",
-    subtotal: 82,
-    items: [
-        {
-            id: "1",
-            name: "Pasta Carbonara",
-            price: 22.5,
-            people: [],
-        },
-        {
-            id: "2",
-            name: "Caesar Salad",
-            price: 15.0,
-            people: [],
-        },
-        {
-            id: "3",
-            name: "Grilled Salmon",
-            price: 32.0,
-            people: [],
-        },
-        {
-            id: "4",
-            name: "Glass of Wine",
-            price: 12.5,
-            people: [],
-        },
-    ],
-};
-
 const BottomSheetModal = ({ visible, onClose, children }) => {
     const [animation] = useState(new Animated.Value(SCREEN_HEIGHT));
     const [isVisible, setIsVisible] = useState(false);
 
-    const opacity = animation.interpolate({
-        inputRange: [0, SCREEN_HEIGHT],
-        outputRange: [1, 0],
-        extrapolate: "clamp",
-    });
-
     useEffect(() => {
         if (visible) {
             setIsVisible(true);
-            Animated.spring(animation, {
+            Animated.timing(animation, {
                 toValue: 0,
                 useNativeDriver: true,
-                tension: 65,
-                friction: 11,
+                duration: 200,
             }).start();
         } else {
-            Animated.spring(animation, {
+            Animated.timing(animation, {
                 toValue: SCREEN_HEIGHT,
                 useNativeDriver: true,
-                tension: 65,
-                friction: 11,
+                duration: 200,
             }).start(() => {
                 setIsVisible(false);
             });
         }
     }, [visible]);
 
-    const handleClose = () => {
-        Animated.spring(animation, {
-            toValue: SCREEN_HEIGHT,
-            useNativeDriver: true,
-            tension: 65,
-            friction: 11,
-        }).start(() => {
-            setIsVisible(false);
-            onClose();
-        });
-    };
-
     if (!isVisible && !visible) return null;
 
     return (
-        <Modal transparent visible={isVisible} onRequestClose={handleClose} animationType="none">
-            <Animated.View
-                style={[
-                    styles.modalOverlay,
-                    {
-                        opacity: opacity,
-                        backgroundColor: "rgba(0, 0, 0, 0.25)",
-                    },
-                ]}
-            >
-                <TouchableOpacity
-                    style={styles.modalBackground}
-                    activeOpacity={1}
-                    onPress={handleClose}
+        <Modal transparent visible={isVisible} onRequestClose={onClose} animationType="none">
+            <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onClose}>
+                <Animated.View
+                    style={[
+                        styles.bottomSheetContainer,
+                        {
+                            transform: [{ translateY: animation }],
+                        },
+                    ]}
                 >
-                    <Animated.View
-                        style={[
-                            styles.bottomSheetContainer,
-                            {
-                                transform: [{ translateY: animation }],
-                            },
-                        ]}
-                    >
-                        <View style={styles.bottomSheetHeader}>
-                            <View style={styles.pullBar} />
-                        </View>
-                        <TouchableWithoutFeedback>
-                            <View style={styles.bottomSheetContent}>{children}</View>
-                        </TouchableWithoutFeedback>
-                    </Animated.View>
-                </TouchableOpacity>
-            </Animated.View>
+                    <View style={styles.bottomSheetHeader}>
+                        <View style={styles.pullBar} />
+                    </View>
+                    <TouchableWithoutFeedback>
+                        <View style={styles.bottomSheetContent}>{children}</View>
+                    </TouchableWithoutFeedback>
+                </Animated.View>
+            </TouchableOpacity>
         </Modal>
     );
 };
@@ -215,46 +128,58 @@ const TotalAmountView = ({ totalAmount, isLoading, onSplitBill, disabled }) => (
 
 const ReceiptView = ({
     navigation,
-    isLoading,
     setStep,
     onProcessed,
     selectedPeople,
     photoUri,
     ocrData,
-    setPeopleHashMap
+    setPeopleHashMap,
+    onUpdatePeople,
+    onUpdateReceipt,
+    initialTotal,
 }) => {
-    const [transaction, setTransaction] = useState({ ...blankTransaction });
-    const [group, setGroup] = useState({
-        members: [],
-    });
-
+    const [transaction, setTransaction] = useState({ items: [] });
+    const [group, setGroup] = useState({ members: [] });
+    const [selectedUser, setSelectedUser] = useState(null);
     const [error, setError] = useState(null);
     const [disableAll, setDisableAll] = useState(false);
     const [totalAmount, setTotalAmount] = useState(0);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [isEditMode, setIsEditMode] = useState(false);
-    const [fadeAnim] = useState(new Animated.Value(1));
     const [showContactList, setShowContactList] = useState(false);
-    const [showAdditionalCharges, setShowAdditionalCharges] = useState(false);
     const [showPhoto, setShowPhoto] = useState(false);
-    const fadeAnim2 = useRef(new Animated.Value(0)).current;
-    const [groupData, setGroupData] = useState(
-        selectedPeople
-            ? {
-                  contacts: selectedPeople.contacts,
-                  friends: selectedPeople.friends,
-                  groups: selectedPeople.groups,
-              }
-            : {
-                  contacts: [],
-                  friends: [],
-                  groups: [],
-              }
-    );
+    const [localSelectedPeople, setLocalSelectedPeople] = useState(null);
+    const fadeAnim2 = React.useRef(new Animated.Value(0)).current;
+    const [showNewItemModal, setShowNewItemModal] = useState(false);
 
     const receiptProcessor = new ReceiptProcessor();
-    const state = useUser();
-    const name = state;
+    const { id, name, username, profileImage } = useUser();
+
+    // Initialize with selectedPeople on mount and handle OCR data
+    useEffect(() => {
+        if (selectedPeople && !localSelectedPeople) {
+            setLocalSelectedPeople(selectedPeople);
+            transformNames(selectedPeople);
+
+            console.log(`selectedPeople ${JSON.stringify(selectedPeople, null, 2)}`);
+        }
+    }, [selectedPeople]);
+
+    useEffect(() => {
+        if (ocrData && Array.isArray(ocrData.items)) {
+            // Ensure we keep the reset state of assignments when data is loaded
+            setTransaction(prev => ({
+                ...prev,
+                items: ocrData.items.map(item => ({
+                    ...item,
+                    price: typeof item.price === "string" ? parseFloat(item.price) : item.price,
+                    people: item.people || [], // Use empty array if no assignments
+                    users: item.users || 1, // Reset to 1 if not assigned
+                })),
+            }));
+            setTotalAmount(ocrData.subtotal || 0);
+        }
+    }, [ocrData]);
 
     useEffect(() => {
         const keyboardWillShow = Keyboard.addListener(
@@ -279,18 +204,6 @@ const ReceiptView = ({
         };
     }, []);
 
-    useEffect(() => {
-        if (ocrData && Array.isArray(ocrData.items)) {
-            const total = getSubTotal(ocrData.items);
-            setTotalAmount(total);
-            if (selectedPeople) {
-                transformNames(selectedPeople, true);
-                setGroupData(selectedPeople);
-            }
-            setTransaction(ocrData);
-        }
-    }, [ocrData, selectedPeople]);
-
     const getSubTotal = (items = []) => {
         if (!Array.isArray(items)) return 0;
         return items.reduce((total, item) => {
@@ -299,41 +212,49 @@ const ReceiptView = ({
         }, 0);
     };
 
-    const transformNames = (newUsers, isInit) => {
-        const selectedContacts = newUsers?.contacts?.filter(contact => contact.selected) || [];
-        const selectedFriends = newUsers?.friends?.filter(friend => friend.selected) || [];
-        const selectedGroupMembers = (
-            newUsers?.groups?.filter(group => group.selected) || []
-        ).flatMap(group => group.members || []);
+    const transformNames = newUsers => {
+        if (!newUsers || !newUsers.uniqueMemberIds) return;
 
-        // const users = [...selectedContacts, ...selectedFriends, ...selectedGroupMembers];
-        const users = [...selectedPeople.uniqueMemberIds];
-        const newMembers = users.map(user => ({
-            id: user.id,
-            name: user.name,
-        }));
+        console.log("Input newUsers:", JSON.stringify(newUsers, null, 2));
+        console.log("uniqueMemberIds:", newUsers.uniqueMemberIds);
 
-        setGroup(prev => ({
-            members: [name, ...users],
-        }));
-    };
+        const users = [...newUsers.uniqueMemberIds];
+        const newMembers = users.map(user => {
+            console.log(`Processing user ${user.name}:`, user);
 
-    const toggleEditMode = () => {
-        Animated.sequence([
-            Animated.timing(fadeAnim, {
-                toValue: 0.5,
-                duration: 100,
-                useNativeDriver: true,
-            }),
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 200,
-                useNativeDriver: true,
-            }),
-        ]).start();
+            const member = {
+                id: user.id,
+                name: user.name,
+                phone: user.phone || user.phoneNumbers?.[0]?.number,
+                phoneNumbers: user.phoneNumbers,
+                avatar: user.imageUri,
+                profileImage: user.profileImage,
+                image: user.image,
+            };
 
-        LayoutAnimation.configureNext(customLayoutAnimation);
-        setIsEditMode(!isEditMode);
+            console.log(`Transformed member ${member.name}:`, member);
+            return member;
+        });
+
+        console.log("All transformed members:", newMembers);
+
+        setGroup(prev => {
+            const newGroup = {
+                members: [
+                    {
+                        id: "you",
+                        name: name,
+                        avatar: profileImage,
+                        profileImage: profileImage,
+                        image: profileImage,
+                        phone: null,
+                    },
+                    ...newMembers,
+                ],
+            };
+            console.log("Final group:", newGroup);
+            return newGroup;
+        });
     };
 
     const handleAddPerson = () => {
@@ -341,45 +262,39 @@ const ReceiptView = ({
     };
 
     const handleSelectPeople = newSelectedPeople => {
-        // Merge the selections while preserving existing selections
-        const mergedContacts = newSelectedPeople.contacts.map(contact => ({
-            ...contact,
-            selected:
-                contact.selected ||
-                groupData.contacts.find(c => c.id === contact.id)?.selected ||
-                false,
-        }));
+        // Update local state
+        setLocalSelectedPeople(newSelectedPeople);
+        transformNames(newSelectedPeople);
 
-        const mergedFriends = newSelectedPeople.friends.map(friend => ({
-            ...friend,
-            selected:
-                friend.selected ||
-                groupData.friends.find(f => f.id === friend.id)?.selected ||
-                false,
-        }));
+        // Propagate changes up to parent
+        onUpdatePeople(newSelectedPeople);
 
-        const mergedGroups = newSelectedPeople.groups.map(group => ({
-            ...group,
-            selected:
-                group.selected || groupData.groups.find(g => g.id === group.id)?.selected || false,
-        }));
-
-        const updatedGroupData = {
-            contacts: mergedContacts,
-            friends: mergedFriends,
-            groups: mergedGroups,
-        };
-
-        setGroupData(updatedGroupData);
-        transformNames(updatedGroupData, false);
         setShowContactList(false);
     };
 
     const handleUpdate = (itemId, updatedItem) => {
         LayoutAnimation.configureNext(customLayoutAnimation);
         setTransaction(prev => {
-            const newItems = prev.items.map(item => (item.id === itemId ? updatedItem : item));
-            updateTotalAmount(newItems);
+            const newItems = prev.items.map(item => {
+                if (item.id === itemId) {
+                    return {
+                        ...item,
+                        ...updatedItem,
+                        price: Number(updatedItem.price),
+                        people: updatedItem.people || [],
+                        users: (updatedItem.people || []).length || 1,
+                    };
+                }
+                return item;
+            });
+
+            // Calculate new total
+            const newTotal = calculateTotal(newItems);
+            setTotalAmount(newTotal);
+
+            // Propagate changes to parent
+            onUpdateReceipt(newItems, newTotal);
+
             return {
                 ...prev,
                 items: newItems,
@@ -389,20 +304,21 @@ const ReceiptView = ({
 
     const updateTotalAmount = items => {
         const newTotal = items.reduce((total, item) => {
-            const itemTotal = typeof item.price === "string" ? parseFloat(item.price) : item.price;
-            return total + (isNaN(itemTotal) ? 0 : itemTotal);
+            const itemTotal = Number(item.price) || 0;
+            return total + itemTotal;
         }, 0);
         setTotalAmount(newTotal);
     };
 
-    const handleDeleteItem = compositeId => {
-        LayoutAnimation.configureNext(customLayoutAnimation);
+    const handleDeleteItem = itemId => {
         setTransaction(prev => {
-            // Extract the numeric ID from the composite key if you're using one
-            const itemId = compositeId.split("-")[0]; // This gets just the id part
+            const newItems = prev.items.filter(item => item.id !== itemId);
+            const newTotal = calculateTotal(newItems);
+            setTotalAmount(newTotal);
 
-            const newItems = prev.items.filter(item => item.id !== Number(itemId)); // Convert back to number if needed
-            updateTotalAmount(newItems);
+            // Propagate changes to parent
+            onUpdateReceipt(newItems, newTotal);
+
             return {
                 ...prev,
                 items: newItems,
@@ -410,19 +326,24 @@ const ReceiptView = ({
         });
     };
 
-    const handleAddItem = () => {
+    const handleAddItem = newItem => {
         const newItemWithId = {
             id: Date.now().toString(),
-            name: "New Item",
-            price: 0,
+            name: newItem.name,
+            price: Number(newItem.price),
             people: [],
-            isNew: true, // Add this flag to identify manually added items
+            users: 1,
         };
 
         LayoutAnimation.configureNext(customLayoutAnimation);
         setTransaction(prev => {
-            const newItems = [...prev.items, newItemWithId];
-            updateTotalAmount(newItems);
+            const newItems = [...(prev.items || []), newItemWithId];
+            const newTotal = calculateTotal(newItems);
+            setTotalAmount(newTotal);
+
+            // Propagate changes to parent
+            onUpdateReceipt(newItems, newTotal);
+
             return {
                 ...prev,
                 items: newItems,
@@ -430,31 +351,30 @@ const ReceiptView = ({
         });
     };
 
-    const handleBackgroundPress = () => {
-        setDisableAll(true);
-        Keyboard.dismiss();
+    const calculateTotal = items => {
+        return items.reduce((total, item) => {
+            return total + (typeof item.price === "number" ? item.price : 0);
+        }, 0);
     };
 
     const handleBack = () => {
-        setStep(2);
+        setStep();
     };
 
-    const handlePressIn = () => {
+    const handlePhotoPress = () => {
         setShowPhoto(true);
         Animated.timing(fadeAnim2, {
             toValue: 1,
             duration: 100,
             useNativeDriver: true,
-            easing: Easing.cubic,
         }).start();
     };
 
-    const handlePressOut = () => {
+    const handlePhotoRelease = () => {
         Animated.timing(fadeAnim2, {
             toValue: 0,
             duration: 75,
             useNativeDriver: true,
-            easing: Easing.linear,
         }).start(() => {
             setShowPhoto(false);
         });
@@ -463,196 +383,196 @@ const ReceiptView = ({
     const handleSplitBill = () => {
         navigation.navigate("AdditionalCharges", {
             onSubmit: data => {
-                const fullTransaction = {
-                    ...transaction,
+                const processedTransaction = {
+                    items: transaction.items.map(item => ({
+                        ...item,
+                        price: Number(item.price),
+                        people: item.people || [],
+                    })),
                     subtotal: totalAmount,
-                    additional: data,
+                    additional: {
+                        tax: Number(data.tax) || 0,
+                        tip: Number(data.tip) || 0,
+                        misc: Number(data.misc) || 0,
+                    },
                 };
-                console.log(`Transaction: ${JSON.stringify(fullTransaction, null, 2)}`);
-                console.log(`Group: ${JSON.stringify(group, null, 2)}`);
-                const result = receiptProcessor.processReceipt(fullTransaction, group);
-                setPeopleHashMap(receiptProcessor.getPeopleHashMap());
-                onProcessed(result);
-                setStep(4);
+
+                try {
+                    const result = receiptProcessor.processReceipt(processedTransaction, group);
+
+                    // Create peopleHashMap with all necessary data including phone numbers
+                    const peopleMap = {};
+                    group.members.forEach(member => {
+                        peopleMap[member.name] = {
+                            ...member,
+                            avatar: member.avatar || member.profileImage || member.image,
+                            phone: member.phone,
+                            phoneNumbers: member.phoneNumbers,
+                        };
+                    });
+
+                    console.log("Created peopleHashMap:", peopleMap); // Debug log
+                    setPeopleHashMap(peopleMap);
+                    onProcessed(result);
+                } catch (error) {
+                    Alert.alert(
+                        "Error",
+                        error.message || "An error occurred while processing the receipt"
+                    );
+                }
             },
-            additionalCharges: transaction.addtional,
         });
     };
 
     return (
-        <>
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.container}>
-                    <View style={styles.header}>
-                        <TouchableOpacity style={styles.closeButton} onPress={handleBack}>
-                            <Text style={styles.closeButtonText}>✕</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={styles.header}>
-                        <Text style={styles.title}>Items:</Text>
-                        <View style={styles.headerButtons}>
-                            <Pressable
-                                onPress={handleAddPerson}
-                                style={({ pressed }) => [
-                                    styles.addPersonButton,
-                                    { transform: [{ scale: pressed ? 0.98 : 1 }] },
-                                ]}
-                            >
-                                <UserPlus size={20} color={theme.colors.primary} />
-                            </Pressable>
-                            <Pressable
-                                onPress={toggleEditMode}
-                                style={({ pressed }) => [
-                                    styles.editButton,
-                                    { transform: [{ scale: pressed ? 0.98 : 1 }] },
-                                ]}
-                            >
-                                <Animated.Text style={styles.editButtonText}>
-                                    {isEditMode ? "Done" : "Edit"}
-                                </Animated.Text>
-                            </Pressable>
-                        </View>
-                    </View>
+        <SafeAreaView style={styles.safeArea}>
+            <View style={styles.container}>
+                {/* Combined Header */}
+                <View style={styles.header}>
+                    <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                        <Ionicons name="chevron-back" size={28} color={theme.colors.primary} />
+                    </TouchableOpacity>
 
-                    <TouchableWithoutFeedback onPress={handleBackgroundPress}>
-                        <View style={styles.innerContainer}>
-                            <ScrollView
-                                style={styles.scrollView}
-                                contentContainerStyle={[
-                                    styles.scrollContent,
-                                    { paddingBottom: keyboardHeight + 10 },
-                                ]}
-                                keyboardShouldPersistTaps="handled"
-                            >
-                                <Animated.View style={{ opacity: fadeAnim }}>
-                                    {transaction.items.map((item, index) => (
-                                        <View
-                                            key={index}
-                                            style={styles.itemContainer}
-                                        >
-                                            <View style={styles.receiptItemWrapper}>
-                                                <ReceiptItemView
-                                                    group={group}
-                                                    item={item}
-                                                    onUpdateItem={handleUpdate}
-                                                    disabled={disableAll || isEditMode}
-                                                    setDisabled={setDisableAll}
-                                                    isEditMode={isEditMode}
-                                                />
-                                            </View>
-                                            {isEditMode && (
-                                                <Pressable
-                                                    onPress={() => handleDeleteItem(item.id)}
-                                                    style={({ pressed }) => [
-                                                        styles.deleteButton,
-                                                        {
-                                                            transform: [
-                                                                { scale: pressed ? 0.92 : 1 },
-                                                            ],
-                                                        },
-                                                    ]}
-                                                >
-                                                    <X
-                                                        width={16}
-                                                        height={16}
-                                                        color="white"
-                                                        style={styles.deleteX}
-                                                    />
-                                                </Pressable>
-                                            )}
-                                        </View>
-                                    ))}
-                                </Animated.View>
-                                <Pressable
-                                    onPress={handleAddItem}
-                                    style={({ pressed }) => [
-                                        styles.newItemButton,
-                                        {
-                                            transform: [{ scale: pressed ? 0.98 : 1 }],
-                                        },
-                                    ]}
-                                >
-                                    <View style={styles.plusIcon}>
-                                        <Plus size={16} color={theme.colors.primary} />
-                                    </View>
-                                    <Text style={styles.newItemButtonText}>Add New Item</Text>
-                                </Pressable>
-                            </ScrollView>
+                    <Text style={styles.title}>Assign your item(s)</Text>
 
-                            <View
-                                style={[
-                                    styles.totalContainerWrapper,
-                                    Platform.OS === "ios"
-                                        ? { bottom: keyboardHeight ? keyboardHeight - 25 : 0 }
-                                        : { bottom: keyboardHeight ? keyboardHeight - 16 : 0 },
-                                ]}
-                            />
-                        </View>
-                    </TouchableWithoutFeedback>
-
-                    {error && (
-                        <View style={styles.errorContainer}>
-                            <Text style={styles.errorText}>{error}</Text>
-                            <Pressable
-                                onPress={() => setError(null)}
-                                style={({ pressed }) => [
-                                    styles.errorButton,
-                                    { transform: [{ scale: pressed ? 0.98 : 1 }] },
-                                ]}
-                            >
-                                <Text style={styles.errorButtonText}>OK</Text>
-                            </Pressable>
-                        </View>
-                    )}
-
-                    <TotalAmountView
-                        totalAmount={totalAmount}
-                        isLoading={isLoading}
-                        onSplitBill={handleSplitBill}
-                        disabled={isEditMode}
-                    />
-
-                    <BottomSheetModal
-                        visible={showContactList}
-                        onClose={() => setShowContactList(false)}
+                    <Pressable
+                        onPress={handleAddPerson}
+                        style={({ pressed }) => [
+                            styles.addPersonButton,
+                            { transform: [{ scale: pressed ? 0.98 : 1 }] },
+                        ]}
                     >
-                        <ContactList
-                            setStep={() => setShowContactList(false)}
-                            onSelectPeople={handleSelectPeople}
-                            groupData={groupData} // Pass the groupData here
-                            type="Done"
-                            handleBack={() => setShowContactList(false)}
-                            ifModal={true} // Add this prop
-                        />
-                    </BottomSheetModal>
+                        <UserPlus size={20} color={theme.colors.primary} />
+                    </Pressable>
                 </View>
-            </SafeAreaView>
-            {photoUri && (
-                <Pressable
-                    onPressIn={handlePressIn}
-                    onPressOut={handlePressOut}
-                    style={styles.floatingPhotoButton}
-                >
-                    <Text style={styles.floatingPhotoButtonText}>📷</Text>
-                </Pressable>
-            )}
 
-            <Animated.View
-                style={[
-                    styles.photoOverlay,
-                    {
-                        opacity: fadeAnim2,
-                        pointerEvents: showPhoto ? "auto" : "none",
-                    },
-                ]}
-            >
-                <Image
-                    source={{ uri: photoUri }}
-                    style={styles.photoPreview}
-                    resizeMode="contain"
+                {/* Main Content */}
+                <View style={[styles.innerContainer, { paddingTop: 8 }]}>
+                    {/* Instruction Banner */}
+                    <InstructionBanner selectedUser={selectedUser} />
+
+                    <ScrollView
+                        style={styles.scrollView}
+                        contentContainerStyle={[
+                            styles.scrollContent,
+                            { paddingBottom: keyboardHeight + 10 },
+                        ]}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {transaction.items.map((item, index) => (
+                            <View key={index} style={styles.itemContainer}>
+                                <View style={styles.receiptItemWrapper}>
+                                    <ReceiptItemView
+                                        group={group}
+                                        item={item}
+                                        onUpdateItem={handleUpdate}
+                                        onDeleteItem={handleDeleteItem}
+                                        disabled={disableAll}
+                                        setDisabled={setDisableAll}
+                                        isEditMode={isEditMode}
+                                        selectedUser={selectedUser}
+                                    />
+                                </View>
+                                {isEditMode && (
+                                    <Pressable
+                                        onPress={() => handleDeleteItem(item.id)}
+                                        style={({ pressed }) => [
+                                            styles.deleteButton,
+                                            { transform: [{ scale: pressed ? 0.92 : 1 }] },
+                                        ]}
+                                    >
+                                        <X size={16} color="white" />
+                                    </Pressable>
+                                )}
+                            </View>
+                        ))}
+
+                        <Pressable
+                            onPress={() => setShowNewItemModal(true)}
+                            style={({ pressed }) => [
+                                styles.newItemButton,
+                                { transform: [{ scale: pressed ? 0.98 : 1 }] },
+                            ]}
+                        >
+                            <View style={styles.plusIcon}>
+                                <Plus size={16} color={theme.colors.primary} />
+                            </View>
+                            <Text style={styles.newItemButtonText}>Add New Item</Text>
+                        </Pressable>
+                    </ScrollView>
+                </View>
+
+                {/* User Selector */}
+                <UserSelector
+                    group={group}
+                    selectedUser={selectedUser}
+                    onSelectUser={setSelectedUser}
                 />
-            </Animated.View>
-        </>
+
+                {/* Total Amount */}
+                <TotalAmountView
+                    totalAmount={totalAmount}
+                    // isLoading={isLoading}
+                    onSplitBill={handleSplitBill}
+                    disabled={isEditMode}
+                />
+
+                {/* Modals */}
+                <BottomSheetModal
+                    visible={showContactList}
+                    onClose={() => setShowContactList(false)}
+                >
+                    <ContactList
+                        setStep={() => setShowContactList(false)}
+                        onSelectPeople={handleSelectPeople}
+                        groupData={localSelectedPeople}
+                        type="Done"
+                        handleBack={() => setShowContactList(false)}
+                        ifModal={true}
+                        fetchedFriends={
+                            localSelectedPeople?.friends || selectedPeople?.friends || []
+                        }
+                        fetchedGroups={localSelectedPeople?.groups || selectedPeople?.groups || []}
+                    />
+                </BottomSheetModal>
+
+                <NewItemModal
+                    visible={showNewItemModal}
+                    onClose={() => setShowNewItemModal(false)}
+                    onSubmit={handleAddItem}
+                />
+
+                {/* Photo Preview */}
+                {photoUri && (
+                    <Pressable
+                        onPressIn={handlePhotoPress}
+                        onPressOut={handlePhotoRelease}
+                        style={({ pressed }) => [
+                            styles.floatingPhotoButton,
+                            { transform: [{ scale: pressed ? 0.98 : 1 }] },
+                        ]}
+                    >
+                        <Text style={styles.photoButtonText}>View Receipt</Text>
+                    </Pressable>
+                )}
+
+                <Animated.View
+                    style={[
+                        styles.photoOverlay,
+                        {
+                            opacity: fadeAnim2,
+                            pointerEvents: showPhoto ? "auto" : "none",
+                        },
+                    ]}
+                >
+                    <Image
+                        source={{ uri: photoUri }}
+                        style={styles.photoPreview}
+                        resizeMode="contain"
+                    />
+                </Animated.View>
+            </View>
+        </SafeAreaView>
     );
 };
 
@@ -672,39 +592,33 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 16,
     },
-    headerButtons: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 16,
-    },
     title: {
         fontSize: 24,
         fontWeight: "bold",
+        flex: 1,
+        paddingLeft: 4,
     },
-    editButton: {
-        padding: 8,
+    backButton: {
+        marginLeft: -10,
     },
     addPersonButton: {
-        padding: 8,
         height: 36,
         width: 36,
         justifyContent: "center",
         alignItems: "center",
         borderRadius: 18,
-    },
-    editButtonText: {
-        color: theme.colors.primary,
-        fontSize: 16,
-        fontWeight: "600",
+        backgroundColor: "rgba(99, 102, 241, 0.1)",
     },
     innerContainer: {
         flex: 1,
+        paddingTop: 8,
     },
     scrollView: {
         flex: 1,
     },
     scrollContent: {
         padding: 10,
+        paddingTop: 4,
     },
     itemContainer: {
         position: "relative",
@@ -729,7 +643,7 @@ const styles = StyleSheet.create({
         width: 24,
         height: 24,
         borderRadius: 12,
-        backgroundColor: profileTheme.colors.red,
+        backgroundColor: "#EF4444",
         justifyContent: "center",
         alignItems: "center",
         shadowColor: "#000",
@@ -742,37 +656,27 @@ const styles = StyleSheet.create({
         elevation: 3,
         zIndex: 2,
     },
-    deleteX: {
-        width: 16,
-        height: 16,
-        color: "white",
-    },
-    deleteButtonText: {
-        color: "white",
-        fontWeight: "500",
-        textAlign: "center",
-    },
     newItemButton: {
-        backgroundColor: theme.colors.primary,
+        backgroundColor: "#EEF2FF",
         padding: 16,
         borderRadius: 12,
         marginTop: 4,
-        marginBottom: 16,
+        marginBottom: 40,
         marginHorizontal: 2,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 3,
+        // shadowColor: "#000",
+        // shadowOffset: {
+        //     width: 0,
+        //     height: 2,
+        // },
+        // shadowOpacity: 0.05,
+        // shadowRadius: 8,
+        // elevation: 3,
     },
     newItemButtonText: {
-        color: "white",
+        color: theme.colors.primary,
         fontSize: 16,
         fontWeight: "500",
         marginLeft: 8,
@@ -781,14 +685,9 @@ const styles = StyleSheet.create({
         width: 24,
         height: 24,
         borderRadius: 12,
-        backgroundColor: "white",
+        backgroundColor: "rgba(99, 102, 241, 0.1)",
         justifyContent: "center",
         alignItems: "center",
-    },
-    totalContainerWrapper: {
-        left: 0,
-        right: 0,
-        backgroundColor: "#fafafa",
     },
     totalContainer: {
         flexDirection: "row",
@@ -830,49 +729,9 @@ const styles = StyleSheet.create({
         color: "white",
         fontWeight: "500",
     },
-    errorContainer: {
-        position: "absolute",
-        top: "50%",
-        left: 20,
-        right: 20,
-        backgroundColor: "white",
-        padding: 20,
-        borderRadius: 12,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    errorText: {
-        fontSize: 16,
-        marginBottom: 16,
-    },
-    errorButton: {
-        alignSelf: "flex-end",
-    },
-    errorButtonText: {
-        color: "#007AFF",
-        fontSize: 16,
-        fontWeight: "500",
-    },
-    closeButton: {
-        padding: 4,
-    },
-    closeButtonText: {
-        fontSize: 16,
-        fontWeight: "300",
-    },
     modalOverlay: {
         flex: 1,
         backgroundColor: "rgba(0, 0, 0, 0.4)",
-        justifyContent: "flex-end",
-    },
-    modalBackground: {
-        flex: 1,
         justifyContent: "flex-end",
     },
     bottomSheetContainer: {
@@ -907,27 +766,39 @@ const styles = StyleSheet.create({
     },
     floatingPhotoButton: {
         position: "absolute",
-        right: 20,
-        bottom: 150,
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        backgroundColor: theme.colors.primary,
+        right: 16,
+        bottom: 225,
+        height: 36,
+        paddingHorizontal: 12,
+        borderRadius: 18,
+        backgroundColor: "rgba(99, 102, 241, 0.1)",
         justifyContent: "center",
         alignItems: "center",
         shadowColor: "#000",
         shadowOffset: {
             width: 0,
-            height: 2,
+            height: 1,
         },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
         zIndex: 999,
     },
-    floatingPhotoButtonText: {
-        fontSize: 24,
-        color: "white",
+    photoButtonText: {
+        color: theme.colors.primary,
+        fontSize: 14,
+        fontWeight: "500",
+    },
+    photoIconWrapper: {
+        width: 20,
+        height: 20,
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    photoButtonText: {
+        color: theme.colors.primary,
+        fontSize: 14,
+        fontWeight: "500",
     },
     photoOverlay: {
         position: "absolute",
@@ -944,6 +815,12 @@ const styles = StyleSheet.create({
         width: "90%",
         height: "70%",
         borderRadius: 12,
+    },
+    userSelectorContainer: {
+        backgroundColor: "white",
+        borderTopWidth: 1,
+        borderTopColor: "#eee",
+        paddingBottom: Platform.OS === "ios" ? 20 : 0,
     },
 });
 

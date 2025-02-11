@@ -18,14 +18,13 @@ import theme from "../../theme/index.js";
 const LoginScreen = ({ navigation }) => {
     const [user, setUser] = useState({});
     const [step, setStep] = useState(0);
-    const prompt = "Enter your username:"
+    const prompt = "Enter your username:";
 
     const { requestVerificationCode, login } = useUser();
 
     const handleUsername = async username => {
         try {
             const data = await requestVerificationCode(username);
-            console.log(data);
             if (data.status !== "verification_sent") return;
 
             setUser({
@@ -36,14 +35,10 @@ const LoginScreen = ({ navigation }) => {
         } catch {}
     };
 
-    const handleSMS = async ( code ) => {
+    const handleSMS = async code => {
         try {
-            const isLogin = await login(user.username, user.phone_number, code);
-
-
-        } catch (error) {
-
-        }
+            const isLogin = await login(user.username, user.phone, code);
+        } catch (error) {}
     };
 
     const handleBack = () => {

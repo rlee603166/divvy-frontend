@@ -5,7 +5,7 @@ import { profileTheme } from "../../theme";
 import { useUser } from "../../services/UserProvider";
 
 const ProfileHeader = ({ navigation }) => {
-    const { name, username, profileImage } = useUser();
+    const { name, username, avatar } = useUser();
 
     const getInitials = name => {
         return name
@@ -19,8 +19,8 @@ const ProfileHeader = ({ navigation }) => {
         <View style={styles.container}>
             <View style={styles.userInfo}>
                 <View style={styles.avatarContainer}>
-                    {profileImage ? (
-                        <Image source={{ uri: profileImage }} style={styles.avatar} />
+                    {avatar ? (
+                        <Image source={{ uri: avatar }} style={styles.avatar} />
                     ) : (
                         <View style={styles.avatarInitials}>
                             <Text style={styles.avatarText}>{getInitials(name)}</Text>
@@ -29,7 +29,7 @@ const ProfileHeader = ({ navigation }) => {
                 </View>
                 <View style={styles.nameContainer}>
                     <Text style={styles.name}>{name}</Text>
-                    <Text style={styles.username}>{username}</Text>
+                    <Text style={styles.username}>{`@${username}`}</Text>
                 </View>
             </View>
             <TouchableOpacity

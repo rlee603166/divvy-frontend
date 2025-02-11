@@ -9,18 +9,7 @@ export const UserProvider = ({ children }) => {
     // const apiURL = "http://localhost:8000/api/v1";
     const apiURL = "http://47.144.148.193:8000/api/v1";
 
-    const [state, setState] = useState({
-        user_id: 1,
-        id: 1,
-        accessToken: null,
-        username: "@johndoe",
-        phone: "123-455-6789",
-        isAuthenticated: false,
-        isLoading: true,
-        error: null,
-        name: "Alex Johnson",
-        profileImage: null,
-    });
+    const [state, setState] = useState({});
 
     // Debug useEffect to track state changes
     useEffect(() => {
@@ -38,7 +27,7 @@ export const UserProvider = ({ children }) => {
     const updateProfileImage = async imageUri => {
         setState(prev => ({
             ...prev,
-            profileImage: imageUri,
+            avatar: imageUri,
         }));
 
         try {
@@ -63,7 +52,18 @@ export const UserProvider = ({ children }) => {
             });
 
             const data = await uploadResponse.json();
-            return data.filepath;
+            const path = data.filepath;
+            let isLocalImage;
+            if (path) {
+                isLocalImage = !path.startsWith("http");
+            }
+            const avatar = isLocalImage ? `${apiURL}/images/pfp/${path}` : path;
+
+            setState(prev => ({
+                ...prev,
+                avatar: avatar,
+            }));
+            return true;
         } catch (error) {
             console.error(error);
             return false;
@@ -99,7 +99,7 @@ export const UserProvider = ({ children }) => {
                                 // Update state only if the API call is successful
                                 setState(prev => ({
                                     ...prev,
-                                    profileImage: null,
+                                    avatar: null,
                                 }));
                             } else {
                                 // Handle API error
@@ -135,7 +135,6 @@ export const UserProvider = ({ children }) => {
     };
 
     const checkAuthState = async () => {
-        console.log("Starting checkAuthState...");
         try {
             const accessToken = await SecureStore.getItemAsync("access_token");
             const refreshToken = await SecureStore.getItemAsync("refresh_token");
@@ -166,7 +165,6 @@ export const UserProvider = ({ children }) => {
             }
 
             const newTokens = await refreshAccessToken(refreshToken);
-            console.log("Token refresh result:", !!newTokens);
 
             if (newTokens) {
                 await loadUserData(newTokens.access_token);
@@ -193,14 +191,25 @@ export const UserProvider = ({ children }) => {
                 },
             });
 
-            if (response.ok) {
-                const userData = await response.json();
+            const userData = await response.json();
+            if (response.ok && userData) {
                 console.log("User data loaded:", userData);
+                let isLocalImage;
+                if (userData?.imageUri) {
+                    isLocalImage = !userData?.imageUri.startsWith("http");
+                }
+                const avatar = isLocalImage
+                    ? `${apiURL}/images/pfp/${userData?.imageUri}`
+                    : userData?.imageUri;
+
                 setState(prev => ({
                     ...prev,
-                    username: userData.username,
-                    phone: userData.phone_number,
+                    id: userData?.user_id,
+                    username: userData?.username,
+                    name: userData?.name,
+                    phone: userData?.phone,
                     accessToken: token,
+                    avatar: avatar,
                     isAuthenticated: true,
                     isLoading: false,
                     error: null,
@@ -248,9 +257,44 @@ export const UserProvider = ({ children }) => {
         }
     };
 
+    const register = async (name, username, phone, imageUri) => {
+        try {
+            const response = await fetch(`${apiURL}/users/register`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    name: name,
+                    username: username,
+                    phone: phone,
+                    imageUri: imageUri
+                }),
+            });
+            const data = await response.json();
+
+            const userInfo = data.user;
+
+            await SecureStore.setItemAsync("access_token", data.access_token);
+            await SecureStore.setItemAsync("refresh_token", data.refresh_token);
+            await saveUsername(userInfo.username);
+
+            setState(prev => ({
+                id: userInfo.user_id,
+                name: userInfo.name,
+                username: userInfo.username,
+                phone: userInfo.phone,
+                avatar: userInfo.imageUri,
+                isAuthenticated: true,
+                isLoading: false,
+                error: null,
+            }));
+
+        } catch {}
+    }
+
     const login = async (username, phone, code) => {
         try {
-            console.log("Attempting login with username:", username);
             const response = await fetch(`${apiURL}/auth/token`, {
                 method: "POST",
                 headers: {
@@ -259,16 +303,14 @@ export const UserProvider = ({ children }) => {
                 },
                 body: JSON.stringify({
                     username,
-                    phone_number: phone,
+                    phone,
                     code,
                 }),
             });
 
-            if (!response.ok) {
-                throw new Error("Login failed");
-            }
-
             const data = await response.json();
+
+            console.log(`token: ${JSON.stringify(data, null, 2)}`);
 
             await SecureStore.setItemAsync("access_token", data.access_token);
             await SecureStore.setItemAsync("refresh_token", data.refresh_token);
@@ -279,10 +321,8 @@ export const UserProvider = ({ children }) => {
                 accessToken: data.access_token,
                 username,
                 phone,
-                isAuthenticated: true,
                 error: null,
             }));
-            console.log("Login successful for username:", username);
 
             return true;
         } catch (error) {
@@ -292,6 +332,8 @@ export const UserProvider = ({ children }) => {
                 error: "Login failed",
             }));
             return false;
+        } finally {
+            await checkAuthState();
         }
     };
 
@@ -336,7 +378,7 @@ export const UserProvider = ({ children }) => {
                 isLoading: false,
                 error: null,
                 name: "Alex Johnson",
-                profileImage: null,
+                avatar: null,
             });
             console.log("Logout complete");
         } catch (error) {
@@ -348,6 +390,7 @@ export const UserProvider = ({ children }) => {
         ...state,
         login,
         logout,
+        register,
         requestVerificationCode,
         refreshAccessToken,
         validateAccessToken,

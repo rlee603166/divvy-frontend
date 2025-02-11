@@ -4,8 +4,9 @@ import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView } from "react-na
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { Camera as CameraIcon, Image as ImageIcon, Flashlight, PenLine } from "lucide-react-native";
+import ProfileIcon from "./../main/ProfileIcon";
 
-const CameraScreen = ({ onPictureTaken }) => {
+const CameraScreen = ({ navigation, onPictureTaken }) => {
     const [facing, setFacing] = useState("back");
     const [flash, setFlash] = useState("off");
     const [permission, requestPermission] = useCameraPermissions();
@@ -41,13 +42,13 @@ const CameraScreen = ({ onPictureTaken }) => {
     };
 
     const toggleFlash = () => {
-        setFlash(current => current === "off" ? "on" : "off");
+        setFlash(current => (current === "off" ? "on" : "off"));
     };
 
     const getFlashIcon = () => {
         return {
             color: flash === "on" ? "#ffd700" : "white",
-            size: 24
+            size: 24,
         };
     };
 
@@ -73,7 +74,7 @@ const CameraScreen = ({ onPictureTaken }) => {
     const handleGalleryPick = async () => {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
+                mediaTypes: ["images"],
                 quality: 1,
             });
 
@@ -87,17 +88,20 @@ const CameraScreen = ({ onPictureTaken }) => {
 
     return (
         <View style={styles.container}>
-            <CameraView 
-                ref={cameraRef} 
-                style={styles.camera} 
-                facing={facing} 
+            <CameraView
+                ref={cameraRef}
+                style={styles.camera}
+                facing={facing}
                 flash={flash}
                 enableTorch={flash === "on"}
             >
                 {/* Top Controls */}
                 <SafeAreaView style={styles.topControls}>
-                    <TouchableOpacity>
-                        
+                    <TouchableOpacity
+                        style={styles.profileButton}
+                        onPress={() => navigation.navigate("Profile")}
+                    >
+                        <ProfileIcon />
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.topButton} onPress={toggleFlash}>
                         <Flashlight {...getFlashIcon()} />
@@ -152,6 +156,12 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         backgroundColor: "rgba(0,0,0,0.3)",
         borderRadius: 25,
+    },
+    profileButton: {
+        width: 50,
+        height: 50,
+        padding: 10,
+        paddingHorizontal: 20
     },
     xButtonText: {
         color: "white",

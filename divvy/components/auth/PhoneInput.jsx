@@ -10,6 +10,7 @@ import {
     KeyboardAvoidingView,
 } from "react-native";
 import theme from "../../theme/index";
+import UserService from "../../services/UserService";
 
 const PhoneInputView = ({ onNext }) => {
     const [countryCode, setCountryCode] = useState("1");
@@ -19,6 +20,8 @@ const PhoneInputView = ({ onNext }) => {
 
     const phoneInputRef = useRef(null);
     const countryCodeInputRef = useRef(null);
+
+    const userService = new UserService();
 
     const formatPhoneNumber = text => {
         const cleaned = text.replace(/\D/g, "");
@@ -64,8 +67,15 @@ const PhoneInputView = ({ onNext }) => {
         try {
             const formattedPhone = `+${countryCode}${rawPhoneNumber}`;
             // const isAvailable = await PhoneService.checkAvailability(formattedPhone);
-            const isAvailable = true;
-            onNext(formattedPhone);
+            const response = await userService.getSMS(rawPhoneNumber);
+
+            if (response.status === "pending") {
+                onNext(rawPhoneNumber);
+            } else if (response.status === "user already exists") {
+                setErrorMessage("This phone number is already registered.");
+            } else {
+                setErrorMessage("An unexpected error occurred. Please try again.");
+            }
         } catch (error) {
             if (error.code === "number_registered") {
                 setErrorMessage("This phone number is already registered");
@@ -78,14 +88,6 @@ const PhoneInputView = ({ onNext }) => {
             setIsChecking(false);
         }
     };
-
-    // useEffect(() => {
-    //     if (phone) {
-    //         const parts = phone.split(" ");
-    //         if (parts[0]) setCountryCode(parts[0]);
-    //         if (parts[1]) setRawPhoneNumber(parts[1].replace(/\D/g, ""));
-    //     }
-    // }, []);
 
     return (
         <KeyboardAvoidingView

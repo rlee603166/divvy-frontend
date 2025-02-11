@@ -2,34 +2,11 @@ import { Image, View, Text, StyleSheet, Pressable } from "react-native";
 import { useEffect, useState } from "react";
 import theme from "../../theme/index.js";
 
-const Venmo = ({ username, onConfirm, onDeny }) => {
-    const apiURL = "http://localhost:8000/api/v1/users/venmo/";
-    const [user, setUser] = useState({});
-    const [isLoading, setIsLoading] = useState(true);
+const Venmo = ({ user, onConfirm, onDeny, isLoading }) => {
+    const apiURL = "http://47.144.148.193:8000/api/v1/users/venmo/";
     const [error, setError] = useState(null);
+    const [userNotFound, setUserNotFound] = useState(false);
 
-    useEffect(() => {
-        fetchVenmo(username);
-    }, [username]);
-
-    const fetchVenmo = async user => {
-        try {
-            console.log(user);
-            const url = apiURL + user;
-            const response = await fetch(url);
-            const data = await response.json();
-            setUser({
-                name: data.username,
-                username: data.handle,
-                photo: data.profile_image,
-                initials: data.initials,
-            });
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const handleConfirm = async () => {
         onConfirm(user);
@@ -45,6 +22,10 @@ const Venmo = ({ username, onConfirm, onDeny }) => {
         <>
             {isLoading ? (
                 <Text>Loading...</Text>
+            ) : userNotFound ? (
+                <View style={styles.container}>
+                    <Text style={styles.headerText}>User doesn't exist</Text>
+                </View>
             ) : (
                 <View style={styles.container}>
                     <View style={styles.contentContainer}>

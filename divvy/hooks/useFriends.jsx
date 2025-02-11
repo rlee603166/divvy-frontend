@@ -12,7 +12,7 @@ export function FriendsProvider({ children, initialFriends = [] }) {
         [...initialFriends].sort((a, b) => a.name.localeCompare(b.name))
     );
 
-    const { id } = useUser();
+    const { id, isAuthenicated } = useUser();
     const userService = new UserService();
 
     // Add state for selected friends
@@ -44,7 +44,7 @@ export function FriendsProvider({ children, initialFriends = [] }) {
                 id: friend.user_id,
                 friend_id: friend.friend_id,
                 name: friend.name,
-                phone: `${friend.username}` || "",
+                phone: `${friend.phone}` || "",
                 username: `${friend.username}` || "",
                 avatar: avatar || null,
                 selected: false,
@@ -104,31 +104,49 @@ export function FriendsProvider({ children, initialFriends = [] }) {
         }
     };
 
-    const deleteFriend = friendId => {
-        Alert.alert("Remove Friend", "Are you sure you want to remove this friend?", [
-            {
-                text: "Cancel",
-                style: "cancel",
-            },
-            {
-                text: "Remove",
-                style: "destructive",
-                onPress: () => {
-                    setFriends(prevFriends => prevFriends.filter(friend => friend.id !== friendId));
-                    // Also remove from selected friends if present
-                    setSelectedFriends(prev => prev.filter(id => id !== friendId));
-                    try {
-                        const data = userService.removeFriend(friendId);
-                        return true;
-                    } catch (error) {
-                        console.error(error);
-                        return false;
-                    }
-                },
-            },
-        ]);
-    };
+    const deleteFriend = friendIds => {
+        const ids = Array.isArray(friendIds) ? friendIds : [friendIds];
 
+        Alert.alert(
+            ids.length > 1 ? "Remove Friends" : "Remove Friend",
+            ids.length > 1
+                ? "Are you sure you want to remove these friends?"
+                : "Are you sure you want to remove this friend?",
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel",
+                },
+                {
+                    text: "Remove",
+                    style: "destructive",
+                    onPress: async () => {
+                        setFriends(prevFriends =>
+                            prevFriends.filter(friend => !ids.includes(friend.id))
+                        );
+                        setSelectedFriends(prev => prev.filter(id => !ids.includes(id)));
+
+                        try {
+                            const results = await Promise.all(
+                                ids.map(friendId => userService.removeFriend(friendId))
+                            );
+
+                            const allSuccess = results.every(result => result);
+
+                            if (!allSuccess) {
+                                console.warn("Some friend removals failed");
+                            }
+
+                            return allSuccess;
+                        } catch (error) {
+                            console.error("Error removing friends:", error);
+                            return false;
+                        }
+                    },
+                },
+            ]
+        );
+    };
     // Add function to toggle friend selection
     const toggleFriendSelection = friendId => {
         setSelectedFriends(prev => {

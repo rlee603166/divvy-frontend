@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import theme from '../../theme';
+    View,
+    Text,
+    TextInput,
+    StyleSheet,
+    TouchableOpacity,
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+} from "react-native";
+import theme from "../../theme";
 
-const SMSVerificationView = ({ phone, onNext, initialCode = '' }) => {
+const SMSVerificationView = ({ phone, onNext, initialCode = "", setStep }) => {
     const [code, setCode] = useState(initialCode);
     const [errorMessage, setErrorMessage] = useState(null);
     const [isChecking, setIsChecking] = useState(false);
@@ -23,59 +23,37 @@ const SMSVerificationView = ({ phone, onNext, initialCode = '' }) => {
         }, 100);
     }, []);
 
-    const handleCodeChange = (text) => {
-        const numericCode = text.replace(/[^0-9]/g, '').slice(0, 6);
+    const handleCodeChange = text => {
+        const numericCode = text.replace(/[^0-9]/g, "").slice(0, 6);
         setCode(numericCode);
     };
 
     const checkCode = async () => {
         setIsChecking(true);
         setErrorMessage(null);
-        
+
         try {
-            await onNext(code);
+            const data = await onNext(code);
+            if (data.status === "denied") {
+                setErrorMessage("Invalid code. Please try again.");
+                return;
+            }
+
+            setErrorMessage(null);
+            setStep(2);
         } catch (error) {
             setIsChecking(false);
-            
-            if (error.name === 'PhoneError') {
-                switch (error.type) {
-                case 'verificationFailed':
-                    setErrorMessage(error.message);
-                    break;
-                case 'networkError':
-                    console.log('Network error:', error.originalError);
-                    setErrorMessage('Network error. Please check your connection and try again.');
-                    break;
-                case 'invalidResponse':
-                    console.log('Invalid response error');
-                    setErrorMessage('Please try entering your code again.');
-                    break;
-                case 'badServerResponse':
-                    setErrorMessage('Unable to verify code. Please try again.');
-                    break;
-                case 'numberAlreadyRegistered':
-                case 'invalidNumber':
-                    setErrorMessage('Invalid phone number. Please go back and try again.');
-                    break;
-                default:
-                    setErrorMessage('An unexpected error occurred. Please try again.');
-                }
-            } else {
-                console.log('Unexpected error:', error);
-                setErrorMessage('An unexpected error occurred. Please try again.');
-            }
-        }
+       } finally {
+       }
     };
 
     return (
-        <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+        <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.container}
         >
             <View style={styles.content}>
-                <Text style={styles.title}>
-                    Enter verification code sent to {phone}
-                </Text>
+                <Text style={styles.title}>Enter verification code sent to {phone}</Text>
 
                 <TextInput
                     ref={inputRef}
@@ -88,9 +66,7 @@ const SMSVerificationView = ({ phone, onNext, initialCode = '' }) => {
                     autoFocus={true}
                 />
 
-                {errorMessage && (
-                    <Text style={styles.errorText}>{errorMessage}</Text>
-                )}
+                {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
 
                 <View style={styles.spacer} />
 
@@ -98,14 +74,12 @@ const SMSVerificationView = ({ phone, onNext, initialCode = '' }) => {
                     <TouchableOpacity
                         style={[
                             styles.button,
-                            isChecking ? styles.buttonDisabled : styles.buttonEnabled
+                            isChecking ? styles.buttonDisabled : styles.buttonEnabled,
                         ]}
                         onPress={checkCode}
                         disabled={isChecking || code.length === 0}
                     >
-                    <Text style={styles.buttonText}>
-                        {isChecking ? 'Checking...' : 'Next'}
-                    </Text>
+                        <Text style={styles.buttonText}>{isChecking ? "Checking..." : "Next"}</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -116,7 +90,7 @@ const SMSVerificationView = ({ phone, onNext, initialCode = '' }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: "#FFFFFF",
     },
     content: {
         flex: 1,
@@ -125,16 +99,16 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 28,
-        fontWeight: '600',
+        fontWeight: "600",
         marginBottom: 24,
     },
     input: {
         fontSize: 24,
-        fontWeight: '600',
+        fontWeight: "600",
         paddingVertical: 12,
     },
     errorText: {
-        color: 'red',
+        color: "red",
         marginTop: 8,
     },
     spacer: {
@@ -142,7 +116,7 @@ const styles = StyleSheet.create({
     },
     buttonContainer: {
         paddingHorizontal: 0,
-        paddingBottom: 80
+        paddingBottom: 80,
     },
     button: {
         height: 48,

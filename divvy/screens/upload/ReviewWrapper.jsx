@@ -8,12 +8,17 @@ import {
     StyleSheet,
     Platform,
     StatusBar,
-    Alert,
+    TouchableOpacity,
+    Linking,
 } from "react-native";
 import ReviewScreen from "../../components/receipt/ReviewScreen";
 import ReceiptService from "../../services/ReceiptService";
-import ReceiptProcessor, { formatForAPI } from "../../services/ReceiptProcessor";
+import ReceiptProcessor, { generateGroupMessage } from "../../services/ReceiptProcessor";
+import { useUser } from "../../services/UserProvider"; // Adjust the path as needed
+import { Share } from "lucide-react-native";
 import theme from "../../theme";
+
+import StatusOverlay from "../../components/upload/StatusOverlay";
 
 const SUBMIT_THRESHOLD = -200;
 const VELOCITY_THRESHOLD = -800;
@@ -21,8 +26,16 @@ const SCREEN_HEIGHT = Dimensions.get("window").height;
 const DRAG_THRESHOLD = 5;
 
 const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
+    const { phone: currentUserPhone, username, id } = useUser();
+
     const [isDragging, setIsDragging] = useState(false);
     const [error, setError] = useState(null);
+    const [isReady, setIsReady] = useState(false);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [showShareButton, setShowShareButton] = useState(false);
+    // New state for submission status message
+    const [submissionStatus, setSubmissionStatus] = useState(null);
+
     const translateY = useRef(new Animated.Value(0)).current;
     const dragStart = useRef(0);
     const isFirstDrag = useRef(true);
@@ -34,13 +47,13 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
     const receiptService = new ReceiptService();
 
     useEffect(() => {
-        translateY.setValue(0);
-        confirmationScale.setValue(0);
-        confirmationOpacity.setValue(0);
-        checkmarkScale.setValue(0);
-        checkmarkStroke.setValue(0);
+        const timer = setTimeout(() => {
+            setIsReady(true);
+        }, 50);
+
 
         return () => {
+            clearTimeout(timer);
             translateY.setValue(0);
             confirmationScale.setValue(0);
             confirmationOpacity.setValue(0);
@@ -49,7 +62,7 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
         };
     }, []);
 
-    const handleError = (errorMessage) => {
+    const handleError = errorMessage => {
         setError(errorMessage);
         Animated.sequence([
             Animated.spring(translateY, {
@@ -64,7 +77,7 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
                 toValue: 0,
                 duration: 300,
                 useNativeDriver: true,
-            })
+            }),
         ]).start(() => {
             setError(null);
         });
@@ -123,9 +136,132 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
         });
     };
 
+    const handleShareMessage = async () => {
+        try {
+            console.log("Full peopleHashMap:", peopleHashMap);
+
+            // Extract, filter, and format phone numbers while excluding the current user's phone.
+            const phoneNumbers = Object.values(peopleHashMap)
+                .filter(person => {
+                    let phone =
+                        person.phone ||
+                        (person.phoneNumbers && person.phoneNumbers[0]?.number) ||
+                        "";
+                    if (!phone) {
+                        console.log("No phone number found for:", person.name);
+                        return false;
+                    }
+                    // Remove non-numeric characters.
+                    const cleanPhone = phone.replace(/\D/g, "");
+                    if (currentUserPhone) {
+                        const cleanCurrent = currentUserPhone.replace(/\D/g, "");
+                        // Exclude if they match either directly or after adding a country code.
+                        if (
+                            cleanPhone === cleanCurrent ||
+                            (cleanPhone.length === 10 && "1" + cleanPhone === cleanCurrent)
+                        ) {
+                            console.log("Excluding current user's phone:", phone);
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .map(person => {
+                    let phone =
+                        person.phone ||
+                        (person.phoneNumbers && person.phoneNumbers[0]?.number) ||
+                        "";
+                    const cleanPhone = phone.replace(/\D/g, "");
+                    let formattedPhone = cleanPhone;
+                    if (cleanPhone.length === 10) {
+                        formattedPhone = "1" + cleanPhone;
+                    }
+                    return formattedPhone;
+                })
+                .filter(phone => phone && phone.length >= 10);
+
+            console.log("Final filtered phone numbers:", phoneNumbers);
+
+            if (phoneNumbers.length === 0) {
+                handleError("No valid phone numbers found");
+                return;
+            }
+
+
+        
+            const message = generateGroupMessage(id, processed, username);
+            let smsUri = "";
+
+            if (Platform.OS === "ios") {
+                if (phoneNumbers.length > 1) {
+                    // For iOS with multiple recipients, use the "addresses" query parameter.
+                    smsUri = `sms:?addresses=${phoneNumbers.join(
+                        ","
+                    )}&body=${encodeURIComponent(message)}`;
+                } else {
+                    smsUri = `sms:${phoneNumbers[0]}?body=${encodeURIComponent(message)}`;
+                }
+            } else {
+                // Android: use semicolon separated recipients.
+                smsUri = `smsto:${phoneNumbers.join(";")}?body=${encodeURIComponent(message)}`;
+            }
+
+            console.log("Final SMS URI:", smsUri);
+
+            const canOpen = await Linking.canOpenURL(smsUri);
+            if (canOpen) {
+                await Linking.openURL(smsUri);
+                // Once the messaging app is opened, reset to camera screen
+                setSubmissionStatus(null);
+                setStep(0);
+                return;
+            } else {
+                // Fallback: try opening without the message body.
+                const fallbackUri =
+                    Platform.OS === "ios"
+                        ? phoneNumbers.length > 1
+                            ? `sms:?addresses=${phoneNumbers.join(",")}`
+                            : `sms:${phoneNumbers[0]}`
+                        : `smsto:${phoneNumbers.join(";")}`;
+                console.log("Fallback SMS URI:", fallbackUri);
+                if (await Linking.canOpenURL(fallbackUri)) {
+                    await Linking.openURL(fallbackUri);
+                    setSubmissionStatus(null);
+                    setStep(0);
+                    return;
+                } else {
+                    handleError("Cannot open messaging app");
+                }
+            }
+        } catch (err) {
+            handleError("Failed to open messaging app");
+            console.error("Share message error:", err);
+        } finally {
+            // Ensure the submission message is cleared if not already done
+            setSubmissionStatus(null);
+        }
+    };
+
     const panResponder = useRef(
         PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onStartShouldSetPanResponderCapture: () => false,
+            onMoveShouldSetPanResponder: (evt, gestureState) => {
+                if (modalVisible) return false;
+
+                const touchY = evt.nativeEvent.pageY;
+                const windowHeight = Dimensions.get("window").height;
+                const dragArea = windowHeight - 220;
+
+                return (
+                    touchY > dragArea &&
+                    Math.abs(gestureState.dy) > DRAG_THRESHOLD &&
+                    Math.abs(gestureState.dy) > Math.abs(gestureState.dx)
+                );
+            },
             onMoveShouldSetPanResponderCapture: (evt, gestureState) => {
+                if (modalVisible) return false;
+
                 const touchY = evt.nativeEvent.pageY;
                 const windowHeight = Dimensions.get("window").height;
                 const dragArea = windowHeight - 220;
@@ -137,6 +273,8 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
                 );
             },
             onPanResponderGrant: evt => {
+                if (modalVisible) return;
+
                 setIsDragging(true);
                 dragStart.current = evt.nativeEvent.pageY;
 
@@ -149,6 +287,8 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
                 }
             },
             onPanResponderMove: (_, gestureState) => {
+                if (modalVisible) return;
+
                 if (gestureState.dy < 0) {
                     const resistance = isFirstDrag.current ? 1 : 0.7;
                     const value = gestureState.dy * resistance;
@@ -156,14 +296,20 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
                 }
             },
             onPanResponderRelease: async (_, gestureState) => {
+                if (modalVisible) return;
+
                 translateY.flattenOffset();
                 setIsDragging(false);
 
                 if (gestureState.dy < SUBMIT_THRESHOLD || gestureState.vy < VELOCITY_THRESHOLD) {
+                    // Reset any confirmation animations
                     confirmationScale.setValue(0);
                     confirmationOpacity.setValue(0);
                     checkmarkScale.setValue(0);
                     checkmarkStroke.setValue(0);
+
+                    // Set the submission status message
+                    setSubmissionStatus("Processing request...");
 
                     Animated.spring(translateY, {
                         toValue: -SCREEN_HEIGHT,
@@ -171,20 +317,9 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
                         stiffness: 200,
                         damping: 25,
                         mass: 1,
-                    }).start(async () => {
-                        try {
-                            const apiFormatted = formatForAPI(processed, receiptID);
-                            console.log(JSON.stringify(apiFormatted, null, 2));
-                            const success = await receiptService.queueVenmoRequests(apiFormatted);
-
-                            if (success) {
-                                await handleSuccess();
-                            } else {
-                                handleError("Failed to send requests. Please try again.");
-                            }
-                        } catch (err) {
-                            handleError(err.message || "An unexpected error occurred");
-                        }
+                    }).start(() => {
+                        // Trigger the sharing process
+                        handleShareMessage();
                     });
                 } else {
                     Animated.spring(translateY, {
@@ -197,6 +332,8 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
                 }
             },
             onPanResponderTerminate: () => {
+                if (modalVisible) return;
+
                 setIsDragging(false);
                 translateY.setOffset(0);
                 Animated.spring(translateY, {
@@ -210,9 +347,30 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
         })
     ).current;
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsReady(true);
+        }, 50);
+
+        return () => {
+            clearTimeout(timer);
+            translateY.setValue(0);
+            confirmationScale.setValue(0);
+            confirmationOpacity.setValue(0);
+            checkmarkScale.setValue(0);
+            checkmarkStroke.setValue(0);
+        };
+    }, []);
+
+    // Return nothing until the component is ready.
+    if (!isReady) {
+        return null;
+    }
+
     return (
-        <View style={styles.rootContainer}>
+        <View style={[styles.rootContainer]}>
             <StatusBar barStyle="dark-content" backgroundColor={theme.colors.primary} />
+
             <View style={StyleSheet.absoluteFill}>
                 <View style={styles.background} />
             </View>
@@ -222,6 +380,8 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
                     <Text style={styles.errorText}>{error}</Text>
                 </Animated.View>
             )}
+
+            {submissionStatus && <StatusOverlay submissionStatus={submissionStatus} />}
 
             <View style={styles.innerContainer}>
                 <Animated.View
@@ -239,13 +399,15 @@ const ReviewWrapper = ({ setStep, processed, receiptID, peopleHashMap }) => {
                             ],
                         },
                     ]}
-                    {...panResponder.panHandlers}
+                    {...(modalVisible ? {} : panResponder.panHandlers)}
                 >
                     <ReviewScreen
                         isDragging={isDragging}
                         processed={processed}
                         setStep={setStep}
                         peopleHashMap={peopleHashMap}
+                        modalVisible={modalVisible}
+                        setModalVisible={setModalVisible}
                     />
                 </Animated.View>
 
@@ -309,6 +471,9 @@ const styles = StyleSheet.create({
     rootContainer: {
         flex: 1,
         backgroundColor: theme.colors.primary,
+    },
+    hidden: {
+        opacity: 0,
     },
     background: {
         flex: 1,
@@ -380,21 +545,39 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     errorContainer: {
-        position: 'absolute',
-        top: Platform.OS === 'ios' ? 40 : StatusBar.currentHeight + 10,
+        position: "absolute",
+        top: Platform.OS === "ios" ? 40 : StatusBar.currentHeight + 10,
         left: 20,
         right: 20,
-        backgroundColor: '#ff3b30',
+        backgroundColor: "#ff3b30",
         padding: 10,
         borderRadius: 8,
         zIndex: 1000,
     },
     errorText: {
-        color: 'white',
-        textAlign: 'center',
+        color: "white",
+        textAlign: "center",
         fontSize: 16,
-        fontWeight: '600',
-    }
+        fontWeight: "600",
+    },
+    submissionOverlay: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: 1500,
+    },
+    submissionText: {
+        color: "white",
+        fontSize: 30,
+        fontWeight: "600",
+        textAlign: "center",
+        padding: 10,
+        borderRadius: 8,
+    },
 });
 
 export default ReviewWrapper;

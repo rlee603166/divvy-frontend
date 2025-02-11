@@ -4,8 +4,6 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AppNavigation from "./navigation/AppNavigator";
 
 import { UserProvider, useUser } from "./services/UserProvider";
-import { FriendsProvider } from "./hooks/useFriends";
-import { GroupsProvider } from "./context/GroupsContext";
 
 const RootStack = createNativeStackNavigator();
 
@@ -24,17 +22,9 @@ const MyTheme = {
 
 export default function App() {
 
-    const initialFriends = [];
-
-    const initialGroups = [];
-
     return (
         <UserProvider>
-            <FriendsProvider initialFriends={initialFriends}>
-                <GroupsProvider initialGroups={initialGroups}>
-                    <AppNavigation />
-                </GroupsProvider>
-            </FriendsProvider>
+            <AppNavigation />
         </UserProvider>
     );
 }

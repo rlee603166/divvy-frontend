@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
     View,
     Text,
@@ -12,8 +12,7 @@ import {
 } from "react-native";
 import theme from "../../theme";
 
-
-const UsernameInput = ({ onSubmit, prompt }) => {
+const UsernameInput = ({ onSubmit, prompt, error }) => {
     const [username, setUsername] = useState("");
     const [errorMessage, setErrorMessage] = useState(null);
     const [isChecking, setIsChecking] = useState(false);
@@ -21,6 +20,10 @@ const UsernameInput = ({ onSubmit, prompt }) => {
         setUsername(text);
         setErrorMessage(null);
     }, []);
+
+    useEffect(() => {
+        setErrorMessage(error);
+    }, [error])
 
     const checkUserAndProceed = useCallback(async () => {
         if (!username.trim()) return;
@@ -128,7 +131,7 @@ const styles = StyleSheet.create({
     },
     buttonContainer: {
         paddingHorizontal: 24,
-        paddingBottom: 80
+        paddingBottom: 80,
     },
     button: {
         height: 48,

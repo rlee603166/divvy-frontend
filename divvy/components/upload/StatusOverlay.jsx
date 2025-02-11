@@ -68,13 +68,13 @@ const SelectedAvatars = memo(({ selectedItems, onRemove }) => {
                         style={styles.selectedAvatarWrapper}
                         onPress={() => onRemove(item.id)}
                     >
-                        {item.avatar ? (
+                        {item.imageUri ? (
                             <Image
                                 style={[
                                     styles.selectedAvatar,
                                     item.type === "group" && styles.selectedAvatarGroup,
                                 ]}
-                                source={{ uri: item.avatar }}
+                                source={{ uri: item.imageUri }}
                                 resizeMode="cover"
                                 cachePolicy="memory"
                             />
@@ -112,18 +112,13 @@ const ContactItem = memo(({ item, onToggle, selectedTab }) => {
 
     return (
         <TouchableOpacity style={styles.contactItem} onPress={handlePress}>
-            <ContactImage
-                imageUri={selectedTab === "groups" ? item.groupImage : item.avatar}
-                name={item.name}
-            />
+            <ContactImage imageUri={item.imageUri} name={item.name} />
             <View style={styles.contactInfo}>
                 <Text style={styles.contactName}>{item.name}</Text>
                 <Text style={styles.contactPhone}>
                     {selectedTab === "groups"
                         ? `${item.members?.length || 0} members`
-                        : selectedTab === "friends"
-                          ? `@${item.username}`
-                          : item.phone || ""}
+                        : item.phone || ""}
                 </Text>
             </View>
             <View style={[styles.checkbox, item.selected && styles.checkboxSelected]}>
@@ -155,9 +150,8 @@ const ContactList = ({
     const [selectedTab, setSelectedTab] = useState("friends");
     const [searchQuery, setSearchQuery] = useState("");
     const [filteredData, setFilteredData] = useState([]);
-    const { id } = useUser();
+    const { user_id } = useUser();
 
-    // Memoized filtered data calculation
     const calculateFilteredData = useCallback(
         (currentData, query) => {
             if (!currentData) return [];
@@ -208,7 +202,7 @@ const ContactList = ({
                                 phone: contact.phoneNumbers?.[0]?.number || "",
                                 // Store all phone numbers
                                 phoneNumbers: contact.phoneNumbers,
-                                avatar: contact.imageAvailable
+                                imageUri: contact.imageAvailable
                                     ? `file://${contact.image?.uri}`
                                     : null,
                                 selected: false,
@@ -258,6 +252,7 @@ const ContactList = ({
                         setFriends(updatedFriends);
                         setGroups(updatedGroups);
                         setContacts(updatedContacts);
+                        console.log(updatedFriends);
 
                         friendsRef.current = updatedFriends;
                         groupsRef.current = updatedGroups;
@@ -312,38 +307,20 @@ const ContactList = ({
 
         const memberMap = new Map();
 
-        // Add selected contacts
         selectedContacts.forEach(contact => {
             console.log(`Processing contact ${contact.name}:`, contact);
             memberMap.set(contact.id, {
                 id: contact.id,
                 name: contact.name,
-                avatar: contact.avatar,
-                profileImage: contact.avatar,
-                image: contact.avatar,
+                imageUri: contact.imageUri,
+                profileImage: contact.imageUri,
+                image: contact.imageUri,
                 phone: contact.phone,
                 phoneNumbers: contact.phoneNumbers,
                 type: "contact",
             });
         });
 
-        selectedFriends.forEach(friend => {
-            console.log(`Processing friend ${friend.name}:`, friend);
-            memberMap.set(friend.id, {
-                ...friend,
-                type: "friend"
-            });
-        });
-
-        selectedGroups.forEach(group => {
-            console.log(`Processing group ${group.name}:`, group);
-            group.members.forEach(member => {
-                if (member.id !== id) memberMap.set(member.id, {
-                    ...member,
-                    type: "group"
-                });
-            })
-        });
         const result = Array.from(memberMap.values());
         console.log("Final memberMap result:", result);
         return result;
@@ -449,45 +426,31 @@ const ContactList = ({
     const onNext = useCallback(() => {
         const uniqueMembersMap = new Map();
 
-        console.log("Processing groups...");
         groups
             .filter(g => g.selected)
             .flatMap(g => g.members || [])
-            .filter(member => member.id !== id && member.id !== id)
-            .forEach(member => {
-                console.log("Adding member:", member.id);
-                uniqueMembersMap.set(member.id, member);
-            });
+            .filter(member => member.id !== user_id && member.user_id !== user_id)
+            .forEach(member => uniqueMembersMap.set(member.id, member));
 
-        console.log("Processing friends...");
         friends
             .filter(f => f.selected)
-            .filter(friend => friend.id !== id && friend.id !== id)
-            .forEach(friend => {
-                console.log("Adding friend:", friend.id);
-                uniqueMembersMap.set(friend.id, friend);
-            });
+            .filter(friend => friend.id !== user_id && friend.user_id !== user_id)
+            .forEach(friend => uniqueMembersMap.set(friend.id, friend));
 
-        console.log("Processing contacts...");
         contacts
-            .filter(c => c.selected) // Add this line to filter selected contacts
-            .filter(contact => contact.id !== id && contact.id !== id)
-            .forEach(contact => {
-                console.log("Adding contact:", contact.id);
-                uniqueMembersMap.set(contact.id, contact);
-            });
+            .filter(c => c.selected)
+            .filter(contact => contact.id !== user_id && contact.user_id !== user_id)
+            .forEach(contact => uniqueMembersMap.set(contact.id, contact));
 
         const selectedData = {
             contacts: contacts,
             friends: friends,
             groups: groups,
-            uniqueMemberIds: Array.from(uniqueMembersMap.values()), // Use keys() for unique IDs
+            uniqueMemberIds: Array.from(uniqueMembersMap.values()),
         };
 
-        console.log("Selected Data:", JSON.stringify(selectedData, null, 2));
-
         onSelectPeople(selectedData);
-    }, [contacts, friends, groups, id, onSelectPeople]);
+    }, [contacts, friends, groups, user_id, onSelectPeople]);
 
     const renderItem = useCallback(
         ({ item }) => (

@@ -1,65 +1,35 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
     View,
     Text,
     TouchableOpacity,
     TextInput,
-    ScrollView,
-    Animated,
     StyleSheet,
+    Modal,
+    Platform,
+    KeyboardAvoidingView,
+    Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import theme from "../../theme/index";
 
-const PeopleToggleButton = ({ name, isSelected, onToggle, isEveryone }) => (
-    <TouchableOpacity
-        onPress={onToggle}
-        style={[
-            styles.toggleButton,
-            isSelected && styles.toggleButtonSelected,
-            isEveryone && styles.everyoneButton,
-        ]}
-    >
-        <View style={styles.toggleButtonContent}>
-            <Text
-                style={[
-                    styles.toggleButtonText,
-                    isSelected && styles.toggleButtonTextSelected,
-                    isEveryone && styles.everyoneButtonText,
-                ]}
-            >
-                {name}
-            </Text>
-            <Ionicons
-                name={isSelected ? "remove" : "add"}
-                size={12}
-                color={isSelected ? theme.colors.primary : "#666"}
-            />
-        </View>
-    </TouchableOpacity>
-);
-
-const ReceiptItemView = ({ group, item, onUpdateItem, disabled, setDisabled, isEditMode }) => {
-    useEffect(() => {
-        console.log(group);
-    }, []);
-
+const ReceiptItemView = ({
+    group,
+    item,
+    onUpdateItem,
+    onDeleteItem,
+    disabled,
+    setDisabled,
+    isEditMode,
+    selectedUser
+}) => {
     const [priceInput, setPriceInput] = useState(item.price.toString());
     const [nameInput, setNameInput] = useState(item.name);
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [isEditingPrice, setIsEditingPrice] = useState(false);
-    const [isEditingName, setIsEditingName] = useState(false);
-    const [selectedPeople, setSelectedPeople] = useState(
-        new Set(item.people?.map(p => p.id) || [])
-    );
-    const expandAnim = useRef(new Animated.Value(0)).current;
-    const rotateAnim = useRef(new Animated.Value(0)).current;
-    const maxHeight = 250;
+    const [isEditing, setIsEditing] = useState(false);
 
     useEffect(() => {
         if (disabled || isEditMode) {
-            setIsEditingName(false);
-            setIsEditingPrice(false);
+            setIsEditing(false);
             setDisabled(false);
         }
     }, [disabled]);
@@ -70,231 +40,219 @@ const ReceiptItemView = ({ group, item, onUpdateItem, disabled, setDisabled, isE
     }, [item.price, item.name]);
 
     const getNumericPrice = price => {
-        const numPrice = typeof price === "string" ? parseFloat(price) : price;
+        const cleanPrice = typeof price === "string" ? price.replace('$', '') : price;
+        const numPrice = typeof cleanPrice === "string" ? parseFloat(cleanPrice) : cleanPrice;
         return isNaN(numPrice) ? 0 : Number(numPrice.toFixed(2));
     };
 
     const handlePriceInputChange = text => {
-        if (text === "" || text === "." || /^\d*\.?\d{0,2}$/.test(text)) {
-            setPriceInput(text);
+        const cleanText = text.replace('$', '');
+        if (cleanText === "" || cleanText === "." || /^\d*\.?\d{0,2}$/.test(cleanText)) {
+            setPriceInput('$' + cleanText);
         }
     };
 
-    const handlePriceSubmit = () => {
+    const handleSubmit = () => {
         let numericPrice = getNumericPrice(priceInput);
-        onUpdateItem(item.id, {
-            ...item,
-            price: numericPrice,
-        });
-        setPriceInput(numericPrice.toFixed(2));
-        setIsEditingPrice(false);
-    };
-
-    const handleNameInputChange = text => {
-        setNameInput(text);
-    };
-
-    const handleNameSubmit = () => {
-        onUpdateItem(item.id, {
-            ...item,
-            name: nameInput,
-        });
-        setIsEditingName(false);
-    };
-
-    const toggleExpand = () => {
-        if (isEditMode) return;
-
-        if (isEditingName || isEditingPrice) {
-            if (isEditingPrice) handlePriceSubmit();
-            if (isEditingName) handleNameSubmit();
-            setIsEditingName(false);
-            setIsEditingPrice(false);
-            return;
+        if (nameInput.trim() && numericPrice >= 0) {
+            onUpdateItem(item.id, {
+                ...item,
+                name: nameInput.trim(),
+                price: numericPrice,
+            });
+            setIsEditing(false);
         }
-
-        const toValue = isExpanded ? 0 : 1;
-
-        Animated.parallel([
-            Animated.spring(rotateAnim, {
-                toValue,
-                useNativeDriver: true,
-                friction: 8,
-            }),
-            Animated.spring(expandAnim, {
-                toValue,
-                useNativeDriver: false,
-                friction: 8,
-            }),
-        ]).start();
-
-        setIsExpanded(!isExpanded);
     };
 
-    const toggleEveryone = () => {
-        const allPeopleIds = group.members.map(person => person.id);
-        const isEveryoneSelected = selectedPeople.size === group.members.length;
-        const newSelectedPeople = isEveryoneSelected ? new Set() : new Set(allPeopleIds);
-
-        setSelectedPeople(newSelectedPeople);
-        onUpdateItem(item.id, {
-            ...item,
-            people: Array.from(newSelectedPeople),
-        });
+    
+    const handleDelete = () => {
+        Alert.alert(
+            "Delete Item",
+            "Are you sure you want to delete this item?",
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel"
+                },
+                {
+                    text: "Delete",
+                    onPress: () => {
+                        // Close the editing modal first
+                        setIsEditing(false);
+                        
+                        // Use requestAnimationFrame to ensure the modal is closed
+                        // before triggering the delete
+                        requestAnimationFrame(() => {
+                            if (onDeleteItem) {
+                                onDeleteItem(item.id);
+                            }
+                        });
+                    },
+                    style: "destructive"
+                }
+            ],
+            { cancelable: true }
+        );
     };
 
-    const togglePerson = personName => {
-        const newSelectedPeople = new Set(selectedPeople);
-        if (newSelectedPeople.has(personName)) {
-            newSelectedPeople.delete(personName);
+    const toggleItemAssignment = () => {
+        if (!selectedUser || isEditMode || isEditing) return;
+        
+        let newPeople;
+        if (selectedUser === 'everyone') {
+            const allMemberIds = group.members.map(member => member.id);
+            const isEveryoneAssigned = allMemberIds.every(id => 
+                item.people?.includes(id)
+            );
+            newPeople = isEveryoneAssigned ? [] : allMemberIds;
         } else {
-            newSelectedPeople.add(personName);
+            const currentPeople = new Set(item.people || []);
+            if (currentPeople.has(selectedUser)) {
+                currentPeople.delete(selectedUser);
+            } else {
+                currentPeople.add(selectedUser);
+            }
+            newPeople = Array.from(currentPeople);
         }
-        setSelectedPeople(newSelectedPeople);
-
+        
         onUpdateItem(item.id, {
             ...item,
-            people: Array.from(newSelectedPeople),
+            people: newPeople
         });
     };
 
-    const rotateInterpolate = rotateAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ["0deg", "180deg"],
-    });
+    const renderAssignedUsers = () => {
+        if (!item?.people?.length) return null;
+        
+        const assignedPeople = new Set(item.people);
+        if (assignedPeople.size === group.members.length) {
+            return <Text style={styles.assignmentText}>Everyone is splitting</Text>;
+        }
 
-    const heightInterpolate = expandAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, maxHeight],
-    });
+        const assignedUsers = group.members
+            .filter(member => assignedPeople.has(member.id))
+            .map(member => {
+                if (!member || typeof member.name !== 'string') {
+                    return 'User';
+                }
+                const nameParts = member.name.split(' ');
+                return nameParts[0] || 'User';
+            })
+            .filter(Boolean);
 
-    const calculateAmountPerPerson = () => {
-        const numericPrice = getNumericPrice(item.price);
-        return selectedPeople.size > 0 ? numericPrice / selectedPeople.size : numericPrice;
+        return assignedUsers.length > 0 ? 
+            <Text style={styles.assignmentText}>{assignedUsers.join(', ')}</Text> : 
+            null;
     };
 
-    const amountPerPerson = calculateAmountPerPerson();
-    const isEveryoneSelected = selectedPeople.size === group.members.length;
+    const isItemHighlighted = () => {
+        if (!selectedUser) return false;
+        if (selectedUser === 'everyone') {
+            return item.people?.length === group.members.length;
+        }
+        return item.people?.includes(selectedUser);
+    };
 
     return (
-        <View style={styles.container}>
-            <TouchableOpacity onPress={toggleExpand} style={styles.header}>
-                <View style={styles.headerContent}>
-                    <View style={styles.itemInfo}>
-                        <View style={styles.nameContainer}>
-                            {isEditingName ? (
-                                <TextInput
-                                    style={[styles.input, styles.nameInput]}
-                                    value={nameInput}
-                                    onChangeText={handleNameInputChange}
-                                    onSubmitEditing={handleNameSubmit}
-                                    onBlur={handleNameSubmit}
-                                    autoFocus
-                                />
-                            ) : (
-                                <TouchableOpacity
-                                    onPress={e => {
-                                        e.stopPropagation();
-                                        setIsEditingName(true);
-                                    }}
-                                    style={styles.nameWrapper}
-                                >
-                                    <Text style={styles.itemName}>{item.name}</Text>
-                                </TouchableOpacity>
-                            )}
+        <View style={styles.outerContainer}>
+            <TouchableOpacity 
+                onPress={toggleItemAssignment}
+                activeOpacity={0.9}
+                disabled={isEditing}
+            >
+                <View style={[
+                    styles.container,
+                    isItemHighlighted() && styles.containerHighlighted
+                ]}>
+                    <View style={styles.header}>
+                        <View style={styles.itemInfo}>
+                            <View style={styles.nameContainer}>
+                                <Text style={styles.itemName}>{item.name}</Text>
+                            </View>
+                            <View style={styles.peopleCount}>
+                                <Ionicons name="people" size={16} color="#666" />
+                                <Text style={styles.peopleCountText}>
+                                    {item.people?.length || 0} people
+                                </Text>
+                            </View>
+                            {renderAssignedUsers()}
                         </View>
 
-                        <View style={styles.peopleCount}>
-                            <Ionicons name="people" size={16} color="#666" />
-                            <Text style={styles.peopleCountText}>
-                                People: {selectedPeople.size}
-                            </Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.priceContainer}>
-                        {isEditingPrice ? (
-                            <TextInput
-                                style={[styles.input, styles.priceInput]}
-                                value={priceInput}
-                                onChangeText={handlePriceInputChange}
-                                onSubmitEditing={handlePriceSubmit}
-                                onBlur={handlePriceSubmit}
-                                keyboardType="decimal-pad"
-                                autoFocus
-                                selectTextOnFocus={true}
-                            />
-                        ) : (
-                            <TouchableOpacity
-                                onPress={e => {
-                                    e.stopPropagation();
-                                    setIsEditingPrice(true);
-                                }}
+                        <View style={styles.priceContainer}>
+                            <Text style={styles.price}>${item.price.toFixed(2)}</Text>
+                            <TouchableOpacity 
+                                onPress={() => !isEditMode && setIsEditing(true)}
+                                style={styles.editButton}
                             >
-                                <Text style={styles.price}>${item.price.toFixed(2)}</Text>
+                                <Ionicons name="create-outline" size={20} color="#666" />
                             </TouchableOpacity>
-                        )}
-
-                        <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
-                            <Ionicons name="chevron-up" size={16} color="#666" />
-                        </Animated.View>
+                        </View>
                     </View>
                 </View>
             </TouchableOpacity>
 
-            <Animated.View style={[styles.expandedContent, { maxHeight: heightInterpolate }]}>
-                <View style={styles.peopleSelector}>
-                    <Text style={styles.sectionTitle}>Split with</Text>
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.peopleScrollView}
-                    >
-                        <PeopleToggleButton
-                            name="Everyone"
-                            isSelected={isEveryoneSelected}
-                            onToggle={toggleEveryone}
-                            isEveryone={true}
+            <Modal
+                visible={isEditing}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsEditing(false)}
+            >
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={styles.modalOverlay}
+                >
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Edit Item</Text>
+                        
+                        <TextInput
+                            style={styles.modalInput}
+                            value={nameInput}
+                            onChangeText={setNameInput}
+                            placeholder="Item name"
+                            placeholderTextColor="#666"
+                            selectionColor={theme.colors.primary}
+                            autoFocus
                         />
-                        {group.members.map(person => {
-                            const firstName = person.name.split(" ")[0];
-                            const duplicateFirstName =
-                                group.members.filter(p => p.name.split(" ")[0] === firstName)
-                                    .length > 1;
+                        
+                        <View style={styles.priceInputContainer}>
+                            <Text style={styles.dollarSign}>$</Text>
+                            <TextInput
+                                style={styles.priceInput}
+                                value={priceInput.replace('$', '')}
+                                onChangeText={handlePriceInputChange}
+                                placeholder="0.00"
+                                placeholderTextColor="#666"
+                                keyboardType="decimal-pad"
+                                selectionColor={theme.colors.primary}
+                            />
+                        </View>
 
-                            const displayName = duplicateFirstName
-                                ? `${firstName} (${person.phone})`
-                                : firstName;
+                        <TouchableOpacity 
+                            style={styles.saveButton}
+                            onPress={handleSubmit}
+                        >
+                            <Text style={styles.saveButtonText}>Save</Text>
+                        </TouchableOpacity>
 
-                            return (
-                                <PeopleToggleButton
-                                    key={person.id}
-                                    name={displayName}
-                                    isSelected={selectedPeople.has(person.id)}
-                                    onToggle={() => togglePerson(person.id)}
-                                    isEveryone={false}
-                                />
-                            );
-                        })}
-                    </ScrollView>
-                </View>
-
-                <View style={styles.amountSection}>
-                    <View style={styles.amountHeader}>
-                        <Text style={styles.amountTitle}>Amount per person</Text>
-                        <Text style={styles.peopleCount}>{selectedPeople.size} people</Text>
+                        <TouchableOpacity 
+                            style={styles.deleteButton}
+                            onPress={handleDelete}
+                        >
+                            <Text style={styles.deleteButtonText}>Delete Item</Text>
+                        </TouchableOpacity>
                     </View>
-                    <View style={styles.amountRow}>
-                        <Text style={styles.amountLabel}>Each pays</Text>
-                        <Text style={styles.amountPerPerson}>${amountPerPerson.toFixed(2)}</Text>
-                    </View>
-                </View>
-            </Animated.View>
+                </KeyboardAvoidingView>
+            </Modal>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
+    outerContainer: {
+        width: '100%',
+        marginHorizontal: 2,
+        marginVertical: 4,
+    },
     container: {
         backgroundColor: "white",
         borderRadius: 16,
@@ -303,17 +261,18 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 8,
         elevation: 2,
-        marginHorizontal: 2,
-        marginVertical: 4,
         overflow: "hidden",
     },
-    header: {
-        padding: 16,
+    containerHighlighted: {
+        backgroundColor: '#F5F8FF',
+        borderLeftWidth: 3,
+        borderLeftColor: theme.colors.primary,
     },
-    headerContent: {
+    header: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
+        padding: 16,
     },
     itemInfo: {
         flex: 1,
@@ -323,12 +282,10 @@ const styles = StyleSheet.create({
         alignItems: "center",
         marginBottom: 4,
     },
-    nameWrapper: {
-        alignSelf: "flex-start",
-    },
     itemName: {
         fontSize: 16,
         fontWeight: "bold",
+        color: '#000',
     },
     peopleCount: {
         flexDirection: "row",
@@ -339,100 +296,91 @@ const styles = StyleSheet.create({
         color: "#666",
         marginLeft: 4,
     },
+    assignmentText: {
+        fontSize: 12,
+        color: "#666",
+        marginTop: 2,
+    },
     priceContainer: {
         flexDirection: "row",
         alignItems: "center",
+        gap: 8,
     },
     price: {
         fontSize: 16,
         fontWeight: "bold",
-        marginRight: 8,
+        color: '#000',
     },
-    input: {
-        borderWidth: 1,
-        borderColor: "#ddd",
-        borderRadius: 8,
-        padding: 8,
+    editButton: {
+        padding: 6,
     },
-    nameInput: {
-        width: 120,
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '80%',
+        backgroundColor: 'white',
+        borderRadius: 14,
+        padding: 20,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        textAlign: 'center',
+        marginBottom: 20,
+        color: '#1a1a1a',
+    },
+    modalInput: {
         fontSize: 16,
+        padding: 12,
+        backgroundColor: '#f5f5f5',
+        borderRadius: 10,
+        marginBottom: 16,
+        color: '#1a1a1a',
+    },
+    priceInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f5f5f5',
+        borderRadius: 10,
+        marginBottom: 16,
+        paddingLeft: 12,
+    },
+    dollarSign: {
+        fontSize: 16,
+        color: '#1a1a1a',
     },
     priceInput: {
-        width: 80,
-        marginRight: 8,
-    },
-    expandedContent: {
-        backgroundColor: "#F9F9F9",
-        overflow: "hidden",
-    },
-    peopleSelector: {
-        marginHorizontal: 8,
-        marginTop: 8,
-        marginBottom: 16,
-    },
-    sectionTitle: {
-        fontSize: 14,
-        color: "#666",
-        marginBottom: 8,
-    },
-    peopleScrollView: {
-        flexDirection: "row",
-    },
-    toggleButton: {
-        backgroundColor: "#f0f0f0",
-        borderRadius: 20,
-        marginRight: 8,
-        padding: 8,
-    },
-    toggleButtonSelected: {
-        backgroundColor: theme.colors.primary + "20",
-    },
-    everyoneButton: {
-        fontWeight: "600",
-    },
-    everyoneButtonText: {
-        fontWeight: "600",
-    },
-    toggleButtonContent: {
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: 4,
-    },
-    toggleButtonText: {
-        color: "#666",
-        marginRight: 4,
-    },
-    toggleButtonTextSelected: {
-        color: theme.colors.primary,
-    },
-    amountSection: {
-        backgroundColor: "#f0f0f0",
-        borderRadius: 8,
-        padding: 16,
-    },
-    amountHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        marginBottom: 8,
-    },
-    amountTitle: {
-        fontSize: 14,
-        color: "#666",
-    },
-    amountRow: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-    },
-    amountLabel: {
+        flex: 1,
         fontSize: 16,
-        fontWeight: "500",
+        padding: 12,
+        color: '#1a1a1a',
     },
-    amountPerPerson: {
-        fontSize: 20,
-        fontWeight: "bold",
-        color: theme.colors.primary,
+    saveButton: {
+        backgroundColor: theme.colors.primary,
+        padding: 14,
+        borderRadius: 10,
+        marginBottom: 10,
+    },
+    saveButtonText: {
+        color: 'white',
+        textAlign: 'center',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    deleteButton: {
+        padding: 14,
+        backgroundColor: 'friendTheme.colors.gray100',
+        borderRadius: 10,
+    },
+    deleteButtonText: {
+        color: '#EF4444',
+        textAlign: 'center',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });
 

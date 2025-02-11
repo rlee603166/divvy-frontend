@@ -32,16 +32,35 @@ const AdditionalCharges = ({ navigation, route }) => {
     }, [additionalCharges]);
 
     const handleBack = () => {
+        // Reset form state
+        setTax(null);
+        setTip(null);
+        setMisc(null);
+        setErrorMessage(null);
+        
+        // Just navigate back without submitting
         navigation.goBack();
     };
 
     const handleSubmit = () => {
         const data = {
-            tax: Number(tax) ?? 0,
-            tip: Number(tip) ?? 0,
-            misc: Number(misc) ?? 0,
+            tax: Number(tax || 0),
+            tip: Number(tip || 0),
+            misc: Number(misc || 0)
         };
-
+    
+        // Validate numbers
+        if (isNaN(data.tax) || isNaN(data.tip) || isNaN(data.misc)) {
+            setErrorMessage("Please enter valid numbers");
+            return;
+        }
+    
+        // Validate non-negative
+        if (data.tax < 0 || data.tip < 0 || data.misc < 0) {
+            setErrorMessage("Values cannot be negative");
+            return;
+        }
+    
         onSubmit(data);
         navigation.goBack();
     };
@@ -74,115 +93,121 @@ const AdditionalCharges = ({ navigation, route }) => {
     // }, [tax, onSubmit]);
 
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.keyboardAvoidingContainer}
-        >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                <View style={styles.container}>
-                    <View style={styles.header}>
-                        <TouchableOpacity style={styles.closeButton} onPress={handleBack}>
-                            <Text style={styles.closeButtonText}>✕</Text>
-                        </TouchableOpacity>
-                    </View>
+        <SafeAreaView style={styles.safeArea}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={styles.keyboardAvoidingContainer}
+            >
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={styles.container}>
+                        <View style={styles.header}>
+                            <TouchableOpacity style={styles.closeButton} onPress={handleBack}>
+                                <Text style={styles.closeButtonText}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
 
-                    <Text style={styles.title}>Add any extra charges:</Text>
-                    <View style={styles.inputContainer}>
-                        <View style={styles.contentContainer}>
-                            <Text style={styles.title2}>Tax:</Text>
-                            <View style={styles.inputWrapper}>
-                                <TextInput
-                                    style={[
-                                        styles.phoneInput,
-                                        Platform.OS === "ios" && styles.iosInput,
-                                    ]}
-                                    value={tax}
-                                    onChangeText={handleTaxChange}
-                                    keyboardType="numeric"
-                                    placeholder="Tax"
-                                    placeholderTextColor="#999"
-                                    maxLength={50}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                    spellCheck={false}
-                                    enablesReturnKeyAutomatically
-                                    clearButtonMode="while-editing"
-                                    blurOnSubmit={true}
-                                    underlineColorAndroid="transparent"
-                                    onSubmitEditing={Keyboard.dismiss}
-                                />
+                        <Text style={styles.title}>Add any extra charges:</Text>
+                        <View style={styles.inputContainer}>
+                            <View style={styles.contentContainer}>
+                                <Text style={styles.title2}>Tax:</Text>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={[
+                                            styles.phoneInput,
+                                            Platform.OS === "ios" && styles.iosInput,
+                                        ]}
+                                        value={tax}
+                                        onChangeText={handleTaxChange}
+                                        keyboardType="numeric"
+                                        placeholder="Tax"
+                                        placeholderTextColor="#999"
+                                        maxLength={50}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                        spellCheck={false}
+                                        enablesReturnKeyAutomatically
+                                        clearButtonMode="while-editing"
+                                        blurOnSubmit={true}
+                                        underlineColorAndroid="transparent"
+                                        onSubmitEditing={Keyboard.dismiss}
+                                    />
+                                </View>
+                                {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
                             </View>
-                            {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
-                        </View>
-                        <View style={styles.contentContainer}>
-                            <Text style={styles.title2}>Tip:</Text>
-                            <View style={styles.inputWrapper}>
-                                <TextInput
-                                    style={[
-                                        styles.phoneInput,
-                                        Platform.OS === "ios" && styles.iosInput,
-                                    ]}
-                                    value={tip}
-                                    onChangeText={handleTipChange}
-                                    keyboardType="numeric"
-                                    placeholder="Tip, Gratuity"
-                                    placeholderTextColor="#999"
-                                    maxLength={50}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                    spellCheck={false}
-                                    enablesReturnKeyAutomatically
-                                    clearButtonMode="while-editing"
-                                    blurOnSubmit={true}
-                                    underlineColorAndroid="transparent"
-                                    onSubmitEditing={Keyboard.dismiss}
-                                />
+                            <View style={styles.contentContainer}>
+                                <Text style={styles.title2}>Tip:</Text>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={[
+                                            styles.phoneInput,
+                                            Platform.OS === "ios" && styles.iosInput,
+                                        ]}
+                                        value={tip}
+                                        onChangeText={handleTipChange}
+                                        keyboardType="numeric"
+                                        placeholder="Tip, Gratuity"
+                                        placeholderTextColor="#999"
+                                        maxLength={50}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                        spellCheck={false}
+                                        enablesReturnKeyAutomatically
+                                        clearButtonMode="while-editing"
+                                        blurOnSubmit={true}
+                                        underlineColorAndroid="transparent"
+                                        onSubmitEditing={Keyboard.dismiss}
+                                    />
+                                </View>
+                                {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
                             </View>
-                            {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
-                        </View>
-                        <View style={styles.contentContainer}>
-                            <Text style={styles.title2}>Misc:</Text>
-                            <View style={styles.inputWrapper}>
-                                <TextInput
-                                    style={[
-                                        styles.phoneInput,
-                                        Platform.OS === "ios" && styles.iosInput,
-                                    ]}
-                                    value={misc}
-                                    onChangeText={handleMiscChange}
-                                    keyboardType="numeric"
-                                    placeholder="ex: Credit Card, Delivery Fees, etc."
-                                    placeholderTextColor="#999"
-                                    maxLength={50}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                    spellCheck={false}
-                                    enablesReturnKeyAutomatically
-                                    clearButtonMode="while-editing"
-                                    blurOnSubmit={true}
-                                    underlineColorAndroid="transparent"
-                                    onSubmitEditing={Keyboard.dismiss}
-                                />
+                            <View style={styles.contentContainer}>
+                                <Text style={styles.title2}>Misc:</Text>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={[
+                                            styles.phoneInput,
+                                            Platform.OS === "ios" && styles.iosInput,
+                                        ]}
+                                        value={misc}
+                                        onChangeText={handleMiscChange}
+                                        keyboardType="numeric"
+                                        placeholder="ex: Credit Card, Delivery Fees, etc."
+                                        placeholderTextColor="#999"
+                                        maxLength={50}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                        spellCheck={false}
+                                        enablesReturnKeyAutomatically
+                                        clearButtonMode="while-editing"
+                                        blurOnSubmit={true}
+                                        underlineColorAndroid="transparent"
+                                        onSubmitEditing={Keyboard.dismiss}
+                                    />
+                                </View>
+                                {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
                             </View>
-                            {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
                         </View>
-                    </View>
 
-                    <View style={styles.buttonContainer}>
-                        <TouchableOpacity
-                            style={[styles.button, styles.buttonEnabled]}
-                            onPress={handleSubmit}
-                        >
-                            <Text style={styles.buttonText}>Done</Text>
-                        </TouchableOpacity>
+                        <View style={styles.buttonContainer}>
+                            <TouchableOpacity
+                                style={[styles.button, styles.buttonEnabled]}
+                                onPress={handleSubmit}
+                            >
+                                <Text style={styles.buttonText}>Done</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
-            </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
+                </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: "white",
+    },
     keyboardAvoidingContainer: {
         flex: 1,
         backgroundColor: "white",
@@ -190,6 +215,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         justifyContent: "space-between",
+        backgroundColor: 'white',
     },
     inputContainer: {
         flex: 1,
@@ -230,7 +256,7 @@ const styles = StyleSheet.create({
     },
     buttonContainer: {
         paddingHorizontal: 24,
-        paddingBottom: 35,
+        paddingBottom: 8,
     },
     button: {
         height: 48,
@@ -250,7 +276,7 @@ const styles = StyleSheet.create({
         fontWeight: "600",
     },
     closeButton: {
-        paddingTop: 4,
+        paddingTop: 12,
         paddingHorizontal: 4,
     },
     closeButtonText: {

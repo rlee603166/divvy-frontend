@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import UploadScreen from "../screens/upload/UploadScreen";
 import AdditionalCharges from "../components/upload/AdditionalCharges";
+import ProfileNavigator from "./ProfileNavigation";
 
 const UploadStack = createNativeStackNavigator();
 
@@ -11,11 +12,7 @@ export default function UploadNavigator() {
                 headerShown: false,
             }}
         >
-            <UploadStack.Screen 
-                name="UploadMain" 
-                component={UploadScreen}
-            />
-            
+            <UploadStack.Screen name="UploadMain" component={UploadScreen} />
             <UploadStack.Screen
                 name="AdditionalCharges"
                 component={AdditionalCharges}
@@ -25,6 +22,7 @@ export default function UploadNavigator() {
                     contentStyle: { backgroundColor: "transparent" },
                 }}
             />
+            <UploadStack.Screen name="Profile" component={ProfileNavigator} />
         </UploadStack.Navigator>
     );
 }

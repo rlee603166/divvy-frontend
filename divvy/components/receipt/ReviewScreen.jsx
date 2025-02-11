@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import ReceiptProcessor, { Person } from '../../services/ReceiptProcessor';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {
     View,
@@ -10,29 +11,30 @@ import {
     SafeAreaView,
     Dimensions,
     Animated,
-    Platform,
-    StatusBar,
     Easing,
 } from "react-native";
 import theme from "../../theme";
+import { Image } from 'expo-image';
 
 const calculateTotals = data => {
-    if (!data || typeof data !== "object") {
+    if (!data || typeof data !== 'object') {
         return { subtotal: 0, tax: 0, tip: 0, misc: 0, total: 0 };
     }
 
-    const subtotal = Object.entries(data)
-        .filter(([key]) => !["tax", "tip", "misc"].includes(key))
-        .reduce((sum, [_, person]) => {
-            const personSubtotal = person?.subtotal || 0;
-            return sum + personSubtotal;
-        }, 0);
+    const personTotals = Object.entries(data)
+        .filter(([key, value]) => value instanceof Person)
+        .reduce((acc, [_, person]) => ({
+            subtotal: acc.subtotal + person.subtotal,
+            tax: acc.tax + person.tax,
+            tip: acc.tip + person.tip,
+            misc: acc.misc + person.misc
+        }), { subtotal: 0, tax: 0, tip: 0, misc: 0 });
 
-    const tax = data.tax || 0;
-    const tip = data.tip || 0;
-    const misc = data.misc || 0;
-    const total = subtotal + tax + tip + misc;
-    return { subtotal, tax, tip, misc, total };
+    return {
+        ...personTotals,
+        total: personTotals.subtotal + personTotals.tax + 
+               personTotals.tip + personTotals.misc
+    };
 };
 
 const AnimatedSwipeText = ({ isDragging, style }) => {
@@ -53,10 +55,15 @@ const AnimatedSwipeText = ({ isDragging, style }) => {
     );
 };
 
-const ReviewScreen = ({ isDragging, processed, setStep, peopleHashMap }) => {
+const ReviewScreen = ({ 
+    isDragging, 
+    processed, 
+    setStep, 
+    peopleHashMap,
+    modalVisible,      // Add this prop
+    setModalVisible    // Add this prop
+}) => {
     const [selectedPerson, setSelectedPerson] = useState(null);
-    const [modalVisible, setModalVisible] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
     const [data, setData] = useState({});
     const [totals, setTotals] = useState({
         subtotal: 0,
@@ -114,17 +121,19 @@ const ReviewScreen = ({ isDragging, processed, setStep, peopleHashMap }) => {
             setData(processed);
             const calculatedTotals = calculateTotals(processed);
             setTotals(calculatedTotals);
-            setIsLoading(true);
-        } else {
-            setIsLoading(false);
         }
     }, [processed]);
 
     const handlePersonPress = name => {
         if (!data[name]) return;
-
+        
+        // Reset animation values before opening
+        slideAnim.setValue(Dimensions.get("window").height);
+        fadeAnim.setValue(0);
+        
         setSelectedPerson(data[name]);
         setModalVisible(true);
+        
         Animated.parallel([
             Animated.timing(slideAnim, {
                 toValue: 0,
@@ -139,11 +148,10 @@ const ReviewScreen = ({ isDragging, processed, setStep, peopleHashMap }) => {
         ]).start();
     };
 
-    const formatNumber = num => {
-        return (num || 0).toFixed(2);
-    };
-
     const handleCloseModal = () => {
+        setModalVisible(false);
+        setSelectedPerson(null);
+        
         Animated.parallel([
             Animated.timing(slideAnim, {
                 toValue: Dimensions.get("window").height,
@@ -156,12 +164,15 @@ const ReviewScreen = ({ isDragging, processed, setStep, peopleHashMap }) => {
                 useNativeDriver: true,
             }),
         ]).start(() => {
-            setModalVisible(false);
-            setSelectedPerson(null);
+            // Reset animation values after close animation completes
+            slideAnim.setValue(Dimensions.get("window").height);
+            fadeAnim.setValue(0);
         });
     };
 
-    if (!isLoading) {
+    const formatNumber = num => (num || 0).toFixed(2);
+
+    if (!data || Object.keys(data).length === 0) {
         return (
             <View style={styles.loadingContainer}>
                 <Text>Loading...</Text>
@@ -169,295 +180,293 @@ const ReviewScreen = ({ isDragging, processed, setStep, peopleHashMap }) => {
         );
     }
 
+    const getPersonImage = (personName) => {
+        console.log('peopleHashMap:', peopleHashMap);
+        console.log('looking for person:', personName);
+        
+        if (!peopleHashMap || !personName) {
+            console.log('peopleHashMap or personName is missing');
+            return null;
+        }
+        
+        const person = peopleHashMap[personName];
+        console.log('found person:', person);
+        
+        if (!person) {
+            console.log('person not found in hashmap');
+            return null;
+        }
+        
+        // Check each possible image property
+        const imageSource = person.imageUri || person.profileImage || person.image;
+        console.log('image source found:', imageSource);
+        
+        return imageSource;
+    };
+
+    const getInitials = (name) => {
+        if (!name) return '';
+        const words = name.trim().split(/\s+/);
+        if (words.length === 1) {
+            // If single word, take up to first two characters
+            return words[0].substring(0, 2).toUpperCase();
+        }
+        // Take first character of first and last word
+        return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    };
+
     return (
-        <View style={styles.rootContainer}>
-            <View style={styles.container}>
-                <View style={styles.spacer} />
-                <TouchableOpacity style={styles.backButton} onPress={() => setStep(3)}>
-                    <Ionicons name="chevron-back" size={28} color={theme.colors.primary} />
-                </TouchableOpacity>
-
-                <Text style={styles.title}>Receipt Review</Text>
-
-                <View style={styles.contentContainer}>
-                    <Text style={styles.sectionTitleShares}>Individual Shares</Text>
-                    <ScrollView style={styles.scrollView}>
-                        <View style={styles.section}>
-                            {Object.keys(data)
-                                .filter(key => !["tax", "tip", "misc"].includes(key))
-                                .map(name => (
-                                    <TouchableOpacity
-                                        key={name}
-                                        style={styles.shareCard}
-                                        onPress={() => handlePersonPress(name)}
-                                    >
-                                        <Text style={styles.personName}>
-                                            {data[name].name}
-                                        </Text>
-                                        <Text style={styles.amount}>
-                                            ${formatNumber(data[name]?.finalTotal)}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                        </View>
-                    </ScrollView>
-
-                    <View style={styles.summaryContainer}>
-                        <View style={[styles.section, styles.summarySection]}>
-                            <Text style={styles.sectionTitle}>Summary</Text>
-                            <View style={styles.summaryContent}>
-                                <View style={styles.summaryRow}>
-                                    <Text>Subtotal</Text>
-                                    <Text>${formatNumber(totals.subtotal)}</Text>
-                                </View>
-                                <View style={styles.summaryRow}>
-                                    <Text>Tax</Text>
-                                    <Text>${formatNumber(totals.tax)}</Text>
-                                </View>
-                                <View style={styles.summaryRow}>
-                                    <Text>Tip</Text>
-                                    <Text>${formatNumber(totals.tip)}</Text>
-                                </View>
-                                <View style={styles.summaryRow}>
-                                    <Text>Misc</Text>
-                                    <Text>${formatNumber(totals.misc)}</Text>
-                                </View>
-                                <View style={[styles.summaryRow, styles.totalRow]}>
-                                    <Text style={styles.boldText}>Total</Text>
-                                    <Text style={styles.boldText}>
-                                        ${formatNumber(totals.total)}
-                                    </Text>
-                                </View>
-                            </View>
-                            <View style={styles.dragHandle}>
-                                <Animated.Text
-                                    style={[
-                                        styles.chevron,
-                                        {
-                                            transform: [{ translateY: bounceAnim }],
-                                        },
-                                    ]}
+        <View style={{ flex: 1 }}>
+            <View style={{ flex: 0, backgroundColor: '#fafafa' }}>
+                <SafeAreaView style={{ flex: 0 }} edges={['top']} />
+            </View>
+            
+            <View style={[styles.mainContainer, { backgroundColor: '#fafafa' }]}>
+                <View style={styles.header}>
+                    <TouchableOpacity style={styles.backButton} onPress={() => setStep(3)}>
+                        <Ionicons name="chevron-back" size={28} color={theme.colors.primary} />
+                    </TouchableOpacity>
+                    <Text style={styles.title}>Receipt Review</Text>
+                </View>
+    
+                <View style={styles.content}>
+                    <Text style={styles.sectionTitle}>Individual Shares</Text>
+                    
+                    <ScrollView style={styles.sharesList}>
+                        {Object.entries(data)
+                            .filter(([key]) => !["tax", "tip", "misc"].includes(key))
+                            .map(([name, person]) => (
+                                <TouchableOpacity
+                                    key={name}
+                                    style={styles.shareCard}
+                                    onPress={() => handlePersonPress(name)}
                                 >
-                                    ︿
-                                </Animated.Text>
-                                <AnimatedSwipeText
-                                    isDragging={isDragging}
-                                    style={styles.swipeText}
-                                />
+                                    <Text style={styles.personName}>{person.name}</Text>
+                                    <View style={styles.amountContainer}>
+                                        <Text style={styles.amount}>
+                                            ${formatNumber(person?.finalTotal)}
+                                        </Text>
+                                        <Ionicons name="chevron-forward" size={20} color="#666" />
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                    </ScrollView>
+    
+                    <View style={styles.summary}>
+                        <Text style={styles.summaryTitle}>Summary</Text>
+                        <View style={styles.summaryContent}>
+                            {[
+                                ["Subtotal", totals.subtotal],
+                                ["Tax", totals.tax],
+                                ["Tip", totals.tip],
+                                ["Misc", totals.misc],
+                            ].map(([label, value]) => (
+                                <View key={label} style={styles.summaryRow}>
+                                    <Text>{label}</Text>
+                                    <Text>${formatNumber(value)}</Text>
+                                </View>
+                            ))}
+                            <View style={[styles.summaryRow, styles.totalRow]}>
+                                <Text style={styles.boldText}>Total</Text>
+                                <Text style={styles.boldText}>
+                                    ${formatNumber(totals.subtotal + totals.tax + totals.tip + totals.misc)}
+                                </Text>
                             </View>
+                        </View>
+                        
+                        <View style={styles.swipeIndicator}>
+                            <Animated.Text style={[
+                                styles.chevron, 
+                                { transform: [{ translateY: bounceAnim }] }
+                            ]}>︿</Animated.Text>
+                            <AnimatedSwipeText isDragging={isDragging} />
                         </View>
                     </View>
                 </View>
-
+            </View>
+    
+            <View style={{ flex: 0, backgroundColor: theme.colors.primary }}>
+                <SafeAreaView style={{ flex: 0 }} edges={['bottom']} />
+            </View>
+    
+            {modalVisible && selectedPerson && (
                 <Modal
                     transparent={true}
                     visible={modalVisible}
-                    onRequestClose={handleCloseModal}
+                    onRequestClose={() => {}}
                     animationType="none"
+                    statusBarTranslucent={true}
                 >
-                    {selectedPerson && (
-                        <TouchableOpacity
-                            activeOpacity={1}
-                            style={styles.modalContainer}
-                            onPress={handleCloseModal}
+                    <View style={styles.modalOverlay}>
+                        <Animated.View
+                            style={[
+                                styles.modalContent,
+                                { 
+                                    opacity: fadeAnim,
+                                    transform: [{ translateY: slideAnim }] 
+                                }
+                            ]}
                         >
-                            <Animated.View
-                                style={[
-                                    styles.modalOverlay,
-                                    {
-                                        opacity: fadeAnim,
-                                    },
-                                ]}
-                            />
-
-                            <Animated.View
-                                style={[
-                                    styles.modalContent,
-                                    {
-                                        transform: [{ translateY: slideAnim }],
-                                    },
-                                ]}
-                            >
-                                <TouchableOpacity
-                                    activeOpacity={1}
-                                    onPress={e => e.stopPropagation()}
-                                    style={{ flex: 1 }}
-                                >
-                                    <View style={styles.modalHeader}>
-                                        <View style={styles.avatar}>
+                            <View style={styles.modalHeader}>
+                                <View style={styles.avatar}>
+                                    {(() => {
+                                        const imageSource = getPersonImage(selectedPerson.name);
+                                        
+                                        return imageSource ? (
+                                            <Image
+                                                source={{ uri: imageSource }}
+                                                style={styles.avatarImage}
+                                                contentFit="cover"
+                                                transition={200}
+                                            />
+                                        ) : (
                                             <Text style={styles.avatarText}>
-                                                {selectedPerson.name?.[0] || ""}
+                                                {getInitials(selectedPerson.name)}
                                             </Text>
-                                        </View>
-                                        <View style={styles.headerTextContainer}>
-                                            <Text style={styles.headerTitle}>
-                                                {selectedPerson.name}'s Share
-                                            </Text>
-                                            <Text style={styles.headerSubtitle}>Order Details</Text>
-                                        </View>
-                                        <TouchableOpacity
-                                            onPress={handleCloseModal}
-                                            style={styles.closeButton}
-                                        >
-                                            <Text style={styles.closeButtonText}>✕</Text>
-                                        </TouchableOpacity>
-                                    </View>
-
-                                    <ScrollView style={styles.modalScroll}>
-                                        <View style={styles.itemsContainer}>
-                                            {(selectedPerson.items || []).map((item, index) => (
-                                                <View key={index} style={styles.itemRow}>
-                                                    <View style={styles.itemNameContainer}>
-                                                        <Text style={styles.itemName}>
-                                                            {item?.name || "Unknown Item"}
-                                                        </Text>
-                                                        {item?.users > 1 && (
-                                                            <Text style={styles.splitText}>
-                                                                Split {item.users} ways
-                                                            </Text>
-                                                        )}
-                                                    </View>
-                                                    <Text style={styles.itemPrice}>
-                                                        $
-                                                        {formatNumber(
-                                                            (item?.price || 0) / (item?.users || 1)
-                                                        )}
-                                                    </Text>
-                                                </View>
-                                            ))}
-                                        </View>
-
-                                        <View style={styles.totalContainer}>
-                                            <View style={styles.summaryRow}>
-                                                <Text>Subtotal</Text>
-                                                <Text>
-                                                    ${formatNumber(selectedPerson.subtotal)}
-                                                </Text>
-                                            </View>
-                                            <View style={styles.summaryRow}>
-                                                <Text>Tax</Text>
-                                                <Text>${formatNumber(selectedPerson.tax)}</Text>
-                                            </View>
-                                            <View style={styles.summaryRow}>
-                                                <Text>Tip</Text>
-                                                <Text>${formatNumber(selectedPerson.tip)}</Text>
-                                            </View>
-                                            <View style={styles.summaryRow}>
-                                                <Text>Misc</Text>
-                                                <Text>${formatNumber(selectedPerson.misc)}</Text>
-                                            </View>
-                                            <View style={styles.totalRow}>
-                                                <Text style={styles.totalLabel}>Final Total</Text>
-                                                <Text style={styles.totalAmount}>
-                                                    ${formatNumber(selectedPerson.finalTotal)}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    </ScrollView>
-
-                                    <TouchableOpacity
-                                        style={styles.doneButton}
-                                        onPress={handleCloseModal}
-                                    >
-                                        <Text style={styles.doneButtonText}>Done</Text>
-                                    </TouchableOpacity>
+                                        );
+                                    })()}
+                                </View>
+                                <View style={styles.headerTextContainer}>
+                                    <Text style={styles.headerTitle}>
+                                        {selectedPerson.name}'s Share
+                                    </Text>
+                                    <Text style={styles.headerSubtitle}>
+                                        Order Details
+                                    </Text>
+                                </View>
+                                <TouchableOpacity 
+                                    onPress={handleCloseModal}
+                                    style={styles.closeButton}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Text style={styles.closeButtonText}>✕</Text>
                                 </TouchableOpacity>
-                            </Animated.View>
-                        </TouchableOpacity>
-                    )}
+                            </View>
+    
+                            <ScrollView 
+                                style={styles.modalScroll}
+                                contentContainerStyle={styles.modalScrollContent}
+                                showsVerticalScrollIndicator={true}
+                                bounces={false}
+                                scrollEventThrottle={16}
+                                onStartShouldSetResponder={() => true}
+                                onStartShouldSetResponderCapture={() => true}
+                                onMoveShouldSetResponder={() => true}
+                                onMoveShouldSetResponderCapture={() => true}
+                                onResponderTerminationRequest={() => false}
+                            >
+                                <View style={styles.itemsContainer}>
+                                    {selectedPerson.items?.map((item, index) => (
+                                        <View key={index} style={styles.itemRow}>
+                                            <View style={styles.itemNameContainer}>
+                                                <Text style={styles.itemName}>
+                                                    {item?.name || "Unknown Item"}
+                                                </Text>
+                                                {item?.users > 1 && (
+                                                    <Text style={styles.splitText}>
+                                                        Split {item.users} ways
+                                                    </Text>
+                                                )}
+                                            </View>
+                                            <Text style={styles.itemPrice}>
+                                                ${formatNumber((item?.price || 0) / (item?.users || 1))}
+                                            </Text>
+                                        </View>
+                                    ))}
+                                </View>
+    
+                                <View style={styles.modalSummary}>
+                                    {[
+                                        ["Subtotal", selectedPerson.subtotal],
+                                        ["Tax", selectedPerson.tax],
+                                        ["Tip", selectedPerson.tip],
+                                        ["Misc", selectedPerson.misc]
+                                    ].map(([label, value]) => (
+                                        <View key={label} style={styles.summaryRow}>
+                                            <Text>{label}</Text>
+                                            <Text>${formatNumber(value)}</Text>
+                                        </View>
+                                    ))}
+                                    <View style={styles.modalTotalRow}>
+                                        <Text style={styles.totalLabel}>Total</Text>
+                                        <Text style={styles.totalAmount}>
+                                            ${formatNumber(selectedPerson.finalTotal)}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </ScrollView>
+    
+                            <TouchableOpacity 
+                                style={styles.doneButton}
+                                onPress={handleCloseModal}
+                            >
+                                <Text style={styles.doneButtonText}>Done</Text>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    </View>
                 </Modal>
-            </View>
+            )}
         </View>
     );
 };
 
 const styles = StyleSheet.create({
+    // Main container styles
+    mainContainer: {
+        flex: 1,
+        backgroundColor: "#fafafa",
+        marginBottom: 8,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+    },
     loadingContainer: {
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
     },
-    rootContainer: {
-        flex: 1,
-        backgroundColor: "#1976d2",
+
+    // Header styles
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 20,
     },
-    container: {
-        flex: 1,
-        backgroundColor: "#f5f5f5",
-    },
-    spacer: {
-        height: Platform.OS === "ios" ? 44 : StatusBar.currentHeight,
-    },
-    contentContainer: {
-        flex: 1,
-        paddingTop: 0,
-    },
-    scrollView: {
-        flex: 1,
+    backButton: {
+        marginRight: 4,
     },
     title: {
         fontSize: 24,
         fontWeight: "bold",
-        padding: 16,
-        paddingVertical: 12,
     },
-    section: {
-        paddingHorizontal: 16,
-    },
-    dragHandle: {
-        alignItems: "center",
-        paddingTop: 16,
-        paddingBottom: 32,
-    },
-    chevron: {
-        fontSize: 24,
-        color: "#666",
-        height: 24,
-        lineHeight: 24,
-    },
-    swipeText: {
-        alignSelf: "center",
-        color: "#666",
-        fontSize: 14,
-        fontWeight: "300",
-    },
-    summaryContainer: {
-        backgroundColor: "white",
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: -2,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 5,
+
+    // Content area styles
+    content: {
+        flex: 1,
+        paddingHorizontal: 20,
     },
     sectionTitle: {
         fontSize: 18,
         fontWeight: "600",
-        marginBottom: 12,
+        marginTop: 6,
+        marginBottom: 18,
     },
-    sectionTitleShares: {
-        fontSize: 18,
-        fontWeight: "600",
-        marginBottom: 12,
-        paddingHorizontal: 16,
+    sharesList: {
+        flex: 1,
     },
+
+    // Share card styles
     shareCard: {
         backgroundColor: "white",
+        paddingHorizontal: 20,
         borderRadius: 12,
-        padding: 14,
-        marginBottom: 8,
+        padding: 18,
+        marginBottom: 10,
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
         shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 1,
-        },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
         shadowRadius: 1.41,
         elevation: 2,
@@ -466,58 +475,92 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "500",
     },
+    amountContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
     amount: {
         fontSize: 16,
         color: theme.colors.primary,
     },
-    summarySection: {
-        backgroundColor: "white",
+
+    // Summary section styles
+    summary: {
+        backgroundColor: 'white',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
-        padding: 16,
-        paddingTop: 20,
-        marginBottom: 0,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+        marginHorizontal: -20,
+        padding: 20,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 5,
+    },
+    summaryTitle: {
+        fontSize: 18,
+        fontWeight: "600",
+        marginBottom: 12,
     },
     summaryContent: {
-        gap: 8,
+        gap: 0,
     },
     summaryRow: {
         flexDirection: "row",
         justifyContent: "space-between",
-        paddingVertical: 3,
+        paddingVertical: 4,
     },
     totalRow: {
-        flex: 1,
-        justifyContent: "space-between",
-        flexDirection: "row",
+        marginTop: 8,
+        paddingTop: 12,
         borderTopWidth: 1,
         borderTopColor: "#e0e0e0",
-        paddingTop: 12,
-        marginTop: 8,
     },
     boldText: {
+        fontSize: 18,
         fontWeight: "bold",
         color: theme.colors.primary,
     },
-    modalContainer: {
-        flex: 1,
-        justifyContent: "flex-end",
+
+    // Swipe indicator styles
+    swipeIndicator: {
+        alignItems: "center",
+        paddingTop: 16,
     },
+    chevron: {
+        fontSize: 24,
+        color: "#666",
+        height: 24,
+        lineHeight: 24,
+    },
+    swipeText: {
+        color: "#666",
+        fontSize: 14,
+        fontWeight: "300",
+    },
+
+    // Modal styles
     modalOverlay: {
-        ...StyleSheet.absoluteFillObject,
+        flex: 1,
         backgroundColor: "rgba(0, 0, 0, 0.5)",
+        justifyContent: "flex-end",
     },
     modalContent: {
         backgroundColor: "white",
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         minHeight: Dimensions.get("window").height * 0.7,
-        paddingVertical: 8,
+        maxHeight: Dimensions.get("window").height * 0.9, // Add maximum height
+        paddingVertical: 20,
     },
     modalHeader: {
         flexDirection: "row",
         alignItems: "center",
         padding: 16,
+        paddingTop: 8,
         borderBottomWidth: 1,
         borderBottomColor: "#e0e0e0",
     },
@@ -525,15 +568,20 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: theme.colors.secondary,
+        backgroundColor: '#f0f0f0',
         justifyContent: "center",
         alignItems: "center",
         marginRight: 12,
+        overflow: 'hidden',
+    },
+    avatarImage: {
+        width: '100%',
+        height: '100%',
     },
     avatarText: {
         fontSize: 18,
         fontWeight: "600",
-        color: theme.colors.primary,
+        color: "#666",
     },
     headerTextContainer: {
         flex: 1,
@@ -548,16 +596,24 @@ const styles = StyleSheet.create({
     },
     closeButton: {
         padding: 8,
+        zIndex: 1, // Ensure button is always tappable
     },
     closeButtonText: {
-        fontSize: 24,
+        fontSize: 20,
         color: "#666",
+        fontWeight: "500",
     },
+
+    // Modal scroll content styles
     modalScroll: {
         flex: 1,
     },
+    modalScrollContent: {
+        flexGrow: 1,
+    },
     itemsContainer: {
-        padding: 16,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
     },
     itemRow: {
         flexDirection: "row",
@@ -586,34 +642,45 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: "#666",
     },
-    totalContainer: {
-        padding: 16,
+
+    // Modal summary styles
+    modalSummary: {
+        padding: 20,
+        paddingTop: 0,
+    },
+    modalTotalRow: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        borderTopWidth: 1,
+        borderTopColor: "#e0e0e0",
+        marginTop: 12,
+        paddingTop: 12,
     },
     totalLabel: {
         fontSize: 16,
         fontWeight: "bold",
+        marginBottom: 12,
     },
     totalAmount: {
         fontSize: 16,
         fontWeight: "bold",
         color: theme.colors.primary,
+        marginBottom: 12,
     },
+
+    // Done button styles
     doneButton: {
         backgroundColor: theme.colors.primary,
         margin: 16,
+        marginBottom: 22,
         padding: 16,
-        borderRadius: 12,
+        borderRadius: 24,
         alignItems: "center",
     },
     doneButtonText: {
         color: "white",
         fontSize: 16,
         fontWeight: "600",
-    },
-    backButton: {
-        padding: 8,
-        marginLeft: 8,
-        marginTop: 4,
     },
 });
 

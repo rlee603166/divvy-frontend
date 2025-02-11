@@ -98,39 +98,43 @@ function SearchUsersScreen({ navigation }) {
                             style={styles.searchResults}
                             showsVerticalScrollIndicator={false}
                         >
-                            {searchResults.map(user => (
-                                <View key={user.id} style={styles.userItem}>
-                                    <View style={styles.leftContainer}>
-                                        <Image
-                                            source={{ uri: user.avatar }}
-                                            style={styles.avatar}
-                                        />
-                                        <View style={styles.userInfo}>
-                                            <Text style={styles.userName}>{user.name}</Text>
-                                            <Text
-                                                style={styles.userUsername}
-                                            >{`@${user.username}`}</Text>
-                                        </View>
-                                    </View>
-                                    {!isUserFriend(user) ? (
-                                        <TouchableOpacity
-                                            style={styles.addButton}
-                                            onPress={() => handleAddFriend(user)}
-                                        >
-                                            <UserPlus
-                                                width={20}
-                                                height={20}
-                                                color={friendTheme.colors.primary}
+                            {searchResults ? (
+                                searchResults?.map(user => (
+                                    <View key={user.id} style={styles.userItem}>
+                                        <View style={styles.leftContainer}>
+                                            <Image
+                                                source={{ uri: user.avatar }}
+                                                style={styles.avatar}
                                             />
-                                            <Text style={styles.addButtonText}>Add</Text>
-                                        </TouchableOpacity>
-                                    ) : (
-                                        <View style={styles.addedButton}>
-                                            <Text style={styles.addedText}>Added</Text>
+                                            <View style={styles.userInfo}>
+                                                <Text style={styles.userName}>{user.name}</Text>
+                                                <Text
+                                                    style={styles.userUsername}
+                                                >{`@${user.username}`}</Text>
+                                            </View>
                                         </View>
-                                    )}
-                                </View>
-                            ))}
+                                        {!isUserFriend(user) ? (
+                                            <TouchableOpacity
+                                                style={styles.addButton}
+                                                onPress={() => handleAddFriend(user)}
+                                            >
+                                                <UserPlus
+                                                    width={20}
+                                                    height={20}
+                                                    color={friendTheme.colors.primary}
+                                                />
+                                                <Text style={styles.addButtonText}>Add</Text>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <View style={styles.addedButton}>
+                                                <Text style={styles.addedText}>Added</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                ))
+                            ) : (
+                                <Text style={styles.addedText}>No Users Found</Text>
+                            )}
                         </ScrollView>
                     )}
                 </View>
