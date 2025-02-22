@@ -8,7 +8,7 @@ const WelcomeScreen = ({ navigation }) => {
 
     return (
         <ImageBackground
-            source={require('../../assets/welcomescreen.jpg')} // Add your image in the assets folder
+            source={require('../../assets/image.jpg')} // Add your image in the assets folder
             style={styles.backgroundImage}
             resizeMode="cover"
         >
